@@ -1,0 +1,9 @@
+msout=.
+
+steps=[sub]
+sub.type=h5parmpredict
+sub.operation=subtract
+sub.applycal.correction=fulljones
+sub.applycal.steps=[sub_apply_amp,sub_apply_phase]
+sub.applycal.sub_apply_amp.correction=amplitude000
+sub.applycal.sub_apply_phase.correction=phase000

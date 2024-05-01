@@ -1,0 +1,6 @@
+test/*
+.nextflow*
+work/*
+report.*
+timeline.*
+*.pyc

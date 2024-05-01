@@ -1,0 +1,15 @@
+msin.datacolumn=CORRECTED_DATA_L2_BP_C
+msout=.
+
+steps=[cal]
+cal.type=ddecal
+cal.mode=diagonal
+cal.solint=60
+cal.nchan=3
+cal.maxiter=50
+cal.uvlambdamin=40
+cal.smoothnessconstraint=2e6
+
+
+
+#test solutions_per_direction

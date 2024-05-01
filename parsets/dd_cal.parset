@@ -1,0 +1,13 @@
+numthreads=1
+msin.datacolumn=DATA
+msout=.
+
+steps=[cal]
+cal.type=ddecal
+cal.mode=diagonal
+cal.directions=[[cluster1],[cluster2],[cluster3],[cluster4],[cluster5],[cluster6],[cluster7]]
+cal.solint=40
+cal.nchan=3
+cal.maxiter=50
+cal.uvlambdamin=40
+cal.smoothnessconstraint=6e6

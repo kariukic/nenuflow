@@ -21,19 +21,6 @@ Introduction
 
    intro
 
-Installation
-------------------------------------------
-Grab the source code from this git repo:
-
-``git clone https://github.com/kariukic/nenuflow``
-
-Then navigate into that directory and run
-
-``pip install .``
-
-or alternatively
-
-``python setup.py install``
 
 Usage
 ------------------------------------------
@@ -54,10 +41,10 @@ Modules
 
 Acknowledgements
 -------------------
-For full funtionality ``NenuFlow`` makes use of several other astronomy software tools such as Nenu_data_, WSClean_ and DP3_. 
+``NenuFlow`` makes use of several other astronomy software tools such as:. 
 
-.. _Nenu_data: https://gitlab.com/chjordan/cthulhu
-.. _DP3: https://sourceforge.net/p/wsclean/wiki/Installation/
+.. _nenucal_cd: https://gitlab.com/flomertens/nenucal-cd
+.. _DP3: https://github.com/lofar-astron/DP3
 .. _WSclean: https://sourceforge.net/p/wsclean/wiki/Installation/
 
 

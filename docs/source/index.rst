@@ -6,14 +6,14 @@
 Nenuflow Documentation
 =================================
 
-Nenufar analysis pipeline
+Nenuflow is an analysis pipeline for radio observational data as recorded by the NenuFAr radio telescope. This processing targets of the 21-cm from the cosmic dawn. The workflow begins with the raw NenuFAR data and outputs the 21-cm signal power spectrum at the end. Check out the usage section for a list of the steps involved and some explanation for each.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
 
-Introduction
+General introduction
 ================================
 
 .. toctree::
@@ -24,12 +24,12 @@ Introduction
 
 Usage
 ------------------------------------------
-Check out the tutorial page for an example.
+Check out the usage page.
 
 .. toctree::
    :maxdepth: 2
 
-   tutorial
+   usage
 
 Modules
 ------------------------------------------

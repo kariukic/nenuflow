@@ -7,7 +7,7 @@ include {
     Combine2AOModels;
     MakeClusters;
     AO2DP3Model;
-    SelectSourcesNearNCP;
+    SelectNearbySources;
     AverageDataInTime
     DP3Calibrate;
     SubtractSources;
@@ -19,10 +19,10 @@ params.stage = null
 
 params.ch_in = null
 
-// Copied from /net/node120/data/users/lofareor/nenufar/obs/L2_BP/20220508_200000_20220509_033100_NCP_COSMIC_DAWN/SW01.MS the took the first 240 timestamps for testing purposes
-//"/net/node[114..115]/data/users/lofareor/chege/nenufar/obs/L2_BP/SW01_16min.MS"
 params.ms = null
-params.ms_avg = "SW01_16min_avg.MS"
+
+params.l3_averaged_ms_name = null
+
 
 //##############################################
 //WORKFLOW: L2
@@ -36,7 +36,7 @@ params.ms_avg = "SW01_16min_avg.MS"
 //      2. Make sourcedp of attenuated model
 //      3. DI calibration
 //      4. DI solutions application
-//      4. A-team subtraction
+//      5. A-team subtraction
 //#############################################
 
 workflow {
@@ -81,9 +81,12 @@ workflow L2_A { // catalog model
 
     main:
 
-        models_ch = Channel.fromPath( [params.intrinsic_catalog_model, params.intrinsic_Ateam_model] ).collect()
+        main_field_model_ch = ModelToolBuild (params.catalog, params.min_flux, params.sky_model_radius, "main_field_intrinsic_model.txt")
 
-        model_attenuate_ch = ModelToolAttenuate ( true, params.ms, params.minimum_elevation, params.minimum_patch_flux, models_ch, 'apparent_sky_model_l2_a.catalog' )
+        // models_ch = Channel.fromPath( [params.intrinsic_catalog_model, params.intrinsic_Ateam_model] ).collect()
+        models_ch = Channel.fromPath( [ main_field_model_ch, params.intrinsic_Ateam_model ] ).collect()
+
+        model_attenuate_ch = ModelToolAttenuate ( true, params.ms, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, models_ch, 'apparent_sky_model_l2_a.catalog' )
 
         make_sourcedb_ch = MakeSourceDB ( model_attenuate_ch.apparent_model, 'apparent_sky_model_l2_a.sourcedb' )
 
@@ -108,7 +111,7 @@ workflow L2_B { //catalog model
     main:
 
         // Attenuate it
-        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_ao_model, params.ms, params.minimum_elevation, params.minimum_patch_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_b.catalog' )
+        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_ao_model, params.ms, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_b.catalog' )
 
         // Convert it to AO format
         ateam_bbs2model_ch = BBS2Model ( ateam_model_attenuate_ch.apparent_model, "apparent_ateam_sky_model_l2_b.ao" )
@@ -143,7 +146,7 @@ workflow L2_C {
     main:
         
          // Attenuate it
-        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_l2b_ao_model, params.ms, params.minimum_elevation, params.minimum_patch_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_c.catalog' )
+        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_l2b_ao_model, params.ms, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_c.catalog' )
 
         // Convert it to AO format
         ateam_bbs2model_ch = BBS2Model ( ateam_model_attenuate_ch.apparent_model, "apparent_ateam_sky_model_l2_c.ao" )
@@ -182,7 +185,7 @@ workflow L2_D {
     main:
         // params.minimum_patch_flux = 1 here
         // Attenuate the intrinsic 3C model. the wsclean model is just a workflow connector
-        attenuate_3c_model_ch = ModelToolAttenuate ( wsclean_l2c_ao_model, params.ms, params.minimum_elevation, 1, params.intrinsic_3C_model, 'apparent_3c_sky_model_l2_d.catalog' )
+        attenuate_3c_model_ch = ModelToolAttenuate ( wsclean_l2c_ao_model, params.ms, params.minimum_elevation, params.minimum_3C_patch_flux, params.min_flux, params.intrinsic_3C_model, 'apparent_3c_sky_model_l2_d.catalog' )
 
         // Convert it to AO format
         bbs2model_3c_ch = BBS2Model ( attenuate_3c_model_ch.apparent_model, "apparent_3c_sky_model_l2_d.ao" )
@@ -203,9 +206,10 @@ workflow L2_D {
         SubtractSources ( params.ms, params.three_c_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2d_ch, attenuate_3c_model_ch.sources_to_subtract_file, "CORRECTED_DATA_L2_BP_C", "SUBTRACTED_DATA_L2_BP_D" )
 
         // Image and convert output model from BBS to AO format #TODO: REMOVE THIS PART IF YOU WANT!
-        // WScleanImage ( subtract_3c_l2d_ch, "SUBTRACTED_DATA_L2_BP_D", "SW01_3c_subtracted_l2_d" )
+        WScleanImage ( subtract_3c_l2d_ch, "SUBTRACTED_DATA_L2_BP_D", "SW01_3c_subtracted_l2_d" )
 
-    emit:
+    emit:1/%YEAR%/%MONTH%/%OBS_ID%/L1/"
+
         // WScleanImage.out.wsclean_ao_model
         SubtractSources.out
 }
@@ -220,7 +224,7 @@ workflow L2_D {
 //      1. Average to 12s
 //      2. calibrate averaged MS with 8mins (40 timesteps) solution intervals
 //      3. Aply solutions to unaveraged data
-//      4. Subtract the NCP using these solutions 
+//      4. Subtract the NCP using these solutions
 ///////////////////////////////////////////////////////////////////////////////////////////
 // Bash Skymodel commands: (Offringa path replaced with singularity container)
 // ~offringa/Software/lofartools/build/bbs2model sw03-sources.txt sw03-sources_ao.txt
@@ -238,11 +242,11 @@ workflow L3 {
     
     main:
 
-        // Select sources within 13.4 degrees of the NCP. Why 13.4?
-        source_selection_ch = SelectSourcesNearNCP (final_ncp_wsclean_ao_model, "dd_ncp_sky_model_l3.ao", 15) // changed from 13.4 just because this is a lower frequency
+        // Select sources within params.sky_model_radius degrees around params.fov_center
+        source_selection_ch = SelectNearbySources (final_ncp_wsclean_ao_model, params.fov_center, params.sky_model_radius, "dd_ncp_sky_model_l3.ao")
 
-        // Make 7 clusters
-        clustering_ch = MakeClusters(source_selection_ch, "dd_ncp_sky_model_clustered_l3.ao", 7)
+        // Make the needed number of clusters
+        clustering_ch = MakeClusters(source_selection_ch, params.number_of_clusters, "dd_ncp_sky_model_clustered_l3.ao")
 
         // Convert the combined model from dp3 format to sourceDB format
         convert_dd_model_to_dp3_format_ch = AO2DP3Model ( clustering_ch, "dd_ncp_sky_model_clustered_l3.skymodel" )
@@ -251,16 +255,16 @@ workflow L3 {
         dd_sourcedb_format_model_ch = MakeSourceDB ( convert_dd_model_to_dp3_format_ch, "dd_ncp_sky_model_clustered_l3.sourcedb" )
 
         // Average the data
-        time_averaging_ch = AverageDataInTime ( dd_sourcedb_format_model_ch, params.ms, params.ms_avg, 3, "SUBTRACTED_DATA_L2_BP_D", "DATA")
+        time_averaging_ch = AverageDataInTime ( dd_sourcedb_format_model_ch, params.ms, params.l3_averaged_ms_name, params.ntimesteps_to_average, "SUBTRACTED_DATA_L2_BP_D", "DATA")
 
         // Perform DD calibration on averaged data
         dd_calibration_l3_ch = DP3Calibrate ( time_averaging_ch, dd_sourcedb_format_model_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3 )
 
         // Subtract NCP using the dd solutions
-        SubtractSources ( params.ms, params.ncp_subtraction_parset, dd_sourcedb_format_model_ch, dd_calibration_l3_ch, "/home/users/chege/theleap/neap/parsets/ncp_clusters.txt", "SUBTRACTED_DATA_L2_BP_D", "SUBTRACTED_DATA_L3" )
+        SubtractSources ( params.ms, params.ncp_subtraction_parset, dd_sourcedb_format_model_ch, dd_calibration_l3_ch, params.ncp_clusters, "SUBTRACTED_DATA_L2_BP_D", "SUBTRACTED_DATA_L3" )
 
         // Image and convert output model from BBS to AO format #TODO: REMOVE THIS PART IF YOU WANT!
-        // WScleanImage ( subtract_ncp_l3_ch, "SUBTRACTED_DATA_L3", "SW01_ncp_subtracted_l3" )
+        WScleanImage ( subtract_ncp_l3_ch, "SUBTRACTED_DATA_L3", "SW01_ncp_subtracted_l3" )
 
     emit:
         // WScleanImage.out.wsclean_ao_model

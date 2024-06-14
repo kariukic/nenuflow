@@ -1,11 +1,12 @@
 #!/usr/bin/env nextflow
 params.memory = "60 GB"
 
-process SelectSourcesNearNCP {
+process SelectNearbySources {
     input:
         path input_model
-        val output_model
+        val fov_center_coords
         val radius
+        val output_model
     
     output:
         path "${output_model}"
@@ -13,7 +14,7 @@ process SelectSourcesNearNCP {
 
     shell:
         '''
-        singularity exec --bind /net,/data !{params.container} editmodel -m /net/$(hostname)/$(pwd)/!{output_model} -near 0h00m00s 90d00m00s !{radius} /net/$(hostname)/$(pwd)/!{input_model}
+        singularity exec --bind /net,/data !{params.container} editmodel -m /net/$(hostname)/$(pwd)/!{output_model} -near !{fov_center_coords} !{radius} /net/$(hostname)/$(pwd)/!{input_model}
         '''
 }
 
@@ -21,8 +22,8 @@ process SelectSourcesNearNCP {
 process MakeClusters {
     input:
         path input_model
-        val output_model
         val number_of_clusters
+        val output_model
     
     output:
         path "${output_model}"
@@ -73,17 +74,57 @@ process AverageDataInTime {
 //      3. Averaging
 ///////////////////////////////////////////////////////////////////////////////////////////
 
+// Retrieve the data from some remote cluster like DATABF to DAWN cluster
+process RetrieveData {
+
+    input:
+        val ready
+        val remote_host
+        val obsid
+        path config_file
+    
+    output:
+        val true
+
+    script:
+        """
+        nenudata retrieve ${remote_host} ${obsid} -c ${config_file} --dry_run
+        """
+}
 
 // Apply bandpass calibration
 process BandpassCalibration {
     input:
         val ready
-        path toml_file
+        path config_file //data_handler_toml_file
         path ms
 
     script:
         """
-        calpipe ${tomlfile} ${ms}
+        calpipe ${config_file} ${ms}
+        """
+}
+
+// Convert L1 data to L2_BP
+// This steps does 3 things (based on the DP3 parset specified in the config file. Can be changed though) 
+// 1. Applying Bandpass solutions obtained earlier
+// 2. Flagging with AOFlagger
+// 3. Averaging
+process ConvertL1toL2 {
+
+    input:
+        val ready
+        val obsid
+        val level // L2_BP
+        val config_file
+    
+    output:
+        val true
+
+    shell:
+        """
+        ulimit -n 4096
+        nenudata l1_to_l2 !{level} !{obsid} -c !{config_file} --l1_level 'L1' --max_concurrent 1
         """
 }
 
@@ -98,7 +139,20 @@ process BandpassCalibration {
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 process ModelToolBuild {
-    pass
+
+    input:
+        val catalog
+        val min_flux
+        val radius
+        val output_catalog
+
+    output:
+        path "${output_catalog}", emit: intrinsic_model
+
+    shell:
+        '''
+        modeltool build  -c !{catalog}} -m !{min_flux} -r !{radius} -o !{output_catalog} > model_build.log
+        '''
 }
 
 
@@ -110,6 +164,7 @@ process ModelToolAttenuate {
         val full_ms_path
         val min_elevation
         val min_patch_flux
+        val min_flux
         path intrinsic_model //or models
         val output_model_name
 
@@ -117,9 +172,9 @@ process ModelToolAttenuate {
         path "${output_model_name}", emit: apparent_model
         path "${output_model_name}.txt", emit: sources_to_subtract_file
 
-    shell: //TODO: parametrize the -m option
+    shell:
         '''
-        modeltool attenuate !{full_ms_path} !{intrinsic_model} -e !{min_elevation} -p !{min_patch_flux} -o !{output_model_name} -m 0.01 > model_attenuate.log
+        modeltool attenuate !{full_ms_path} !{intrinsic_model} -e !{min_elevation} -p !{min_patch_flux} -o !{output_model_name} -m !{min_flux}  > model_attenuate.log
         python3 !{projectDir}/templates/apparent_sources_left.py -i model_attenuate.log -o !{output_model_name}.txt -e 'Main'
         '''
 }
@@ -140,7 +195,6 @@ process MakeSourceDB {
         '''
         makesourcedb in=!{input_model} out=!{sourcedb_name} > make_source_db.log
         '''
-
 }
 
 
@@ -271,4 +325,12 @@ process SubtractSources {
         directions_to_subtract=$(<!{sources_to_subtract_file})
         DP3 !{subtraction_parset} msin=!{full_ms_path} sub.applycal.parmdb=!{calibration_solutions_file} sub.sourcedb=!{sourcedb_name} sub.directions=${directions_to_subtract} msin.datacolumn=!{input_datacolumn} msout.datacolumn=!{output_datacolumn}> di_sub.log
         '''
+}
+
+
+def readTxtIntoString (txt) {
+    List tlist = file(txt).readLines()
+    String tstring = tlist.collect {"${it}"}.join(" ")
+
+    return tstring
 }

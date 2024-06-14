@@ -1,29 +1,37 @@
 #!/usr/bin/env nextflow
 // New Extension in Nançay Upgrading LOFAR (NenuFAR) Analysis Pipeline
-// TODO: variables to change
-//      1. Channel names
-//      2. Model outputs names
-//      3. Input the input params for modelattenuate at the workflow level maybe?
-//      4. Combine all stages that take an intrinsic wsclean model, maybe + other models and attenuates them then does all the conversion stages to sourcedb format
-//      5. Also make the di_calibration stage fully parametrised in its own workflow? #Also the output solutions file
 
+include {
+    RetrieveData;
+    ConvertL1toL2;
+    readTxtIntoString;
+} from "./neap_processes.nf"
 
-//TODO: 
-// collect and plot solutions
-// Streamlit it
-// Sort out results directory structure
-// Maybe memory and time limits?
-// Include the data splitting process
+// All logs for the run will be stored here
+params.logs_dir = null // "/home/users/chege/theleap/neap/test/logs"
 
-params.logs_dir = "/home/users/chege/theleap/neap/test/logs"
+// A list of the msfiles (consecutive timechunks) that make the full Spectral window
+params.mslist = null //"/home/users/chege/theleap/neap/test/sw01_56min_ms_list.txt" 
 
-params.mslist = "/home/users/chege/theleap/neap/test/sw01_56min_ms_list.txt" // TODO: change this into  function that accepts a list of nodes and returns a list of MS by combining the datapath and the ms-name params
-List mslist = file(params.mslist).readLines()
-String mses = mslist.collect {"${it}"}.join(" ")
+// The name of all the MSfiles on each node. All timechunks should have the same name but located on different nodes
+params.ms = null// "/data/users/lofareor/chege/nenufar/obs/L2_BP/SW01_56MinChunk.MS"    //SW01_16min.MS"
 
-params.ms = "/data/users/lofareor/chege/nenufar/obs/L2_BP/SW01_56MinChunk.MS"    //SW01_16min.MS"
-params.datapath = "/data/users/lofareor/chege/nenufar/obs/L2_BP"
-params.hosts = "/home/users/chege/theleap/neap/test/pssh_hosts_list.txt"
+// The path to the MSfiles on each node
+params.datapath = null //"/data/users/lofareor/chege/nenufar/obs/L2_BP"
+
+// The nodes in which the msfiles are distributed
+params.hosts = null //"/home/users/chege/theleap/neap/test/pssh_hosts_list.txt"
+
+// this string is used by wsclean 
+// mses = readTxtIntoString (params.mslist)
+
+// TODO: Maybe read the ms, datapath and hosts params from the mslist param
+//TEST DATA
+// Copied from /net/node120/data/users/lofareor/nenufar/obs/L2_BP/20220508_200000_20220509_033100_NCP_COSMIC_DAWN/SW01.MS the took the first 240 timestamps for testing purposes
+//"/net/node[114..115]/data/users/lofareor/chege/nenufar/obs/L2_BP/SW01_16min.MS"
+
+params.obsid=null // "20231208_NT04"
+
 
 process DistributedCalibration {
     debug true
@@ -47,32 +55,59 @@ process DistributedCalibration {
     """
 }
 
-
+//H5parm_collector.py
+//soltool plot
 workflow {
 
-    l2a_ch = Run_L2A()
-    l2b_ch = Run_L2B(l2a_ch)
-    l2c_ch = Run_L2C(l2b_ch)
-    l2d_ch = Run_L2D(l2c_ch)
-    l3_ch = Run_L3(l2d_ch)
-
-    // Run AOFLagger for post-calibration RFI Flagging
-    // Run AOqulity collect to  get the Aoquality statistics
-
-    // For pspipe list all MS in time in one line
-        // steps:
-        // create mslist with the observation_id as the name of the file. observationId use date_field_spectralwindow
-        // 
+    // l1_ch = Retrieve()
+    l2_ch = L1toL2( true ) //l1_ch 
+    // l2a_ch = Run_L2A( l2_ch )
+    // l2b_ch = Run_L2B( l2a_ch )
+    // l2c_ch = Run_L2C( l2b_ch )
+    // l2d_ch = Run_L2D( l2c_ch )
+    // l3_ch = Run_L3( l2d_ch )
 
 }
 
+// Run AOFLagger for post-calibration RFI Flagging
+// Run AOquality collect to  get the Aoquality statistics
 
-workflow Run_L2A {
+// For pspipe list all MS in time in one line
+    // steps:
+    // create mslist with the observation_id as the name of the file. observationId use date_field_spectralwindow
+    // 
+
+
+workflow Retrieve {
+    main:
+        RetrieveData( true, params.remote_host, params.obsid, params.config_file )
+
+    emit:
+        RetrieveData.out
+
+}
+
+workflow L1toL2 {
+    take:
+        l1_data_ready
 
     main:
-        cal_l2a_ch = DistributedCalibration ( true, true, params.ms, params.datapath, params.serial_neap, "L2_A", params.hosts )
+        ConvertL1toL2( l1_data_ready, params.obsid, "L2_BP", params.config_file )
 
-        WScleanImage ( cal_l2a_ch, mses, "CORRECTED_DATA_L2_BP_A", "SW01_ateam_subtracted_l2_a" )
+    emit:
+        ConvertL1toL2.out
+}
+
+
+
+workflow Run_L2A {
+    take:
+        l2_data_available
+
+    main:
+        cal_l2a_ch = DistributedCalibration ( true, l2_data_available, params.ms, params.datapath, params.serial_neap, "L2_A", params.hosts )
+
+        WScleanImage ( cal_l2a_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_BP_A", "SW01_ateam_subtracted_l2_a" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
@@ -86,7 +121,7 @@ workflow Run_L2B {
     main:
         cal_l2b_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L2_B", params.hosts )
 
-        WScleanImage ( cal_l2b_ch, mses, "CORRECTED_DATA_L2_BP_B", "SW01_ateam_subtracted_l2_b" )
+        WScleanImage ( cal_l2b_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_BP_B", "SW01_ateam_subtracted_l2_b" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
@@ -102,7 +137,7 @@ workflow Run_L2C {
     main:
         cal_l2c_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L2_C", params.hosts )
 
-        WScleanImage ( cal_l2c_ch, mses, "CORRECTED_DATA_L2_BP_C", "SW01_ateam_subtracted_l2_c" )
+        WScleanImage ( cal_l2c_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_BP_C", "SW01_ateam_subtracted_l2_c" )
 
     emit:
 
@@ -119,7 +154,7 @@ workflow Run_L2D {
     main:
         cal_l2d_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L2_D", params.hosts )
 
-        WScleanImage ( cal_l2d_ch, mses, "SUBTRACTED_DATA_L2_BP_D", "SW01_3c_subtracted_l2_d" )
+        WScleanImage ( cal_l2d_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L2_BP_D", "SW01_3c_subtracted_l2_d" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
@@ -134,14 +169,12 @@ workflow Run_L3 {
     main:
         cal_l3_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L3", params.hosts )
 
-        WScleanImage ( cal_l3_ch, mses, "SUBTRACTED_DATA_L3", "SW01_ncp_subtracted_l3" )
+        WScleanImage ( cal_l3_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L3", "SW01_ncp_subtracted_l3" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
 
 }
-
-
 
 //WSclean image
 process WScleanImage {
@@ -150,6 +183,9 @@ process WScleanImage {
     input:
         val ready
         val mses
+        val size // 1800
+        val scale // 1amin
+        val spectral_pol_fit // 2
         val data_column
         val image_name
 
@@ -160,9 +196,7 @@ process WScleanImage {
     // # make image size and the pixel size here a parameter, fit-spectral-pol
     shell:
         '''
-        # wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 2000 -scale 3amin -size 600 600 -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol 2 !{mses} > wsclean_image.log
-
-        wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 5000 -scale 1amin -size 1800 1800 -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol 2 !{mses} > wsclean_image.log
+        wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 5000 -scale !{scale} -size !{size} !{size} -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol !{spectral_pol_fit} !{mses} > wsclean_image.log
 
         singularity exec --bind /net,/data !{params.container} bbs2model $(pwd)/!{image_name}-sources.txt $(pwd)/!{image_name}-sources.ao
         '''

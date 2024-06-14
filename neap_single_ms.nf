@@ -70,6 +70,13 @@ workflow {
     L3(L2_D.out)
 }
 
+workflow L1 {
+    main:
+        retrieve_ch = RetrieveData(true, 'databf', params.obsid, params.config_file)
+        ConvertL1toL2(retrieve_ch, "L2_BP", params.obsid, params.config_file)
+    emit:
+        ConvertL1toL2.out
+}
 
 
 workflow L2_A { //catalog model
@@ -342,20 +349,55 @@ process AverageDataInTime {
 //      3. Averaging
 ///////////////////////////////////////////////////////////////////////////////////////////
 
+// Retrieve the data from some remote cluster like DATABF to DAWN cluster
+process RetrieveData {
+
+    input:
+        val ready
+        val remote_host
+        val obsid
+        path config_file
+    
+    output:
+        
+
+    script:
+        """
+        nenudata retrieve ${remote_host} ${obsid} -c ${config_file}
+        """
+}
 
 // Apply bandpass calibration
 process BandpassCalibration {
     input:
         val ready
-        path toml_file
+        path config_file //data_handler_toml_file
         path ms
 
     script:
         """
-        calpipe ${tomlfile} ${ms}
+        calpipe ${config_file} ${ms}
         """
 }
 
+// Convert L1 data to L2_BP
+// This steps does 3 things (based on the DP3 parset specified in the config file. Can be changed though) 
+// 1. Applying Bandpass solutions obtained earlier
+// 2. Flagging with AOFlagger
+// 3. Averaging
+process ConvertL1toL2 {
+
+    input:
+        val ready
+        val level // L2_BP
+        val config_file
+
+    script:
+        """
+        nenudata l1_to_l2 ${level} ${obsid} -c ${config_file} --l1_level 'L1' --max_concurrent 1
+        """
+
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // Data: L2

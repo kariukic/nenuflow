@@ -1,6 +1,24 @@
 #!/usr/bin/env nextflow
 params.memory = "60 GB"
 
+process GetMSList {
+    input:
+        val ready
+        val obsid
+        val level // L1
+        val spectral_window // SW03
+        path config_file // data_handler.toml
+
+    
+    output:
+        val true
+
+    script:
+        '''
+        nenudata get_ms -c ${config_file} -s ${spectral_window} ${level} ${obsid}
+        '''
+}
+
 process SelectNearbySources {
     input:
         path input_model
@@ -141,6 +159,7 @@ process ConvertL1toL2 {
 process ModelToolBuild {
 
     input:
+        path msin
         val catalog
         val min_flux
         val radius
@@ -151,7 +170,7 @@ process ModelToolBuild {
 
     shell:
         '''
-        modeltool build  -c !{catalog}} -m !{min_flux} -r !{radius} -o !{output_catalog} > model_build.log
+        modeltool build  -c !{catalog} -m !{min_flux} -r !{radius} -o !{output_catalog} !{msin} > model_build.log
         '''
 }
 
@@ -161,7 +180,7 @@ process ModelToolAttenuate {
 
     input:
         val ready
-        val full_ms_path
+        path full_ms_path
         val min_elevation
         val min_patch_flux
         val min_flux

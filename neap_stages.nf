@@ -1,6 +1,7 @@
 #!/usr/bin/env nextflow
 
 include {
+    ModelToolBuild;
     ModelToolAttenuate;
     BBS2Model;
     MakeSourceDB;
@@ -13,7 +14,6 @@ include {
     SubtractSources;
     ApplyDI;
 } from './neap_processes.nf'
-
 
 params.stage = null
 
@@ -42,7 +42,7 @@ params.l3_averaged_ms_name = null
 workflow {
 
     if ( params.stage == "L2_A" ) {
-
+        
         L2_A ( params.ch_in )
 
     }
@@ -81,25 +81,26 @@ workflow L2_A { // catalog model
 
     main:
 
-        main_field_model_ch = ModelToolBuild (params.catalog, params.min_flux, params.sky_model_radius, "main_field_intrinsic_model.txt")
+        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ).collect {it}
+        main_field_model_ch = ModelToolBuild (msets_channel, params.catalog, params.min_flux, params.sky_model_radius, "main_field_intrinsic_model.txt")
 
-        // models_ch = Channel.fromPath( [params.intrinsic_catalog_model, params.intrinsic_Ateam_model] ).collect()
-        models_ch = Channel.fromPath( [ main_field_model_ch, params.intrinsic_Ateam_model ] ).collect()
+        ateams_ch = Channel.of( params.intrinsic_Ateam_model )
 
-        model_attenuate_ch = ModelToolAttenuate ( true, params.ms, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, models_ch, 'apparent_sky_model_l2_a.catalog' )
+        model_attenuate_ch = ModelToolAttenuate ( true, msets_channel, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, main_field_model_ch.concat( ateams_ch ).collect(), 'apparent_sky_model_l2_a.catalog' )
 
         make_sourcedb_ch = MakeSourceDB ( model_attenuate_ch.apparent_model, 'apparent_sky_model_l2_a.sourcedb' )
 
-        di_calibration_ch = DP3Calibrate ( params.ms, make_sourcedb_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
+        di_calibration_ch = DP3Calibrate ( msets_channel, make_sourcedb_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
 
-        subtract_ateams_ch = SubtractSources ( params.ms, params.ateams_subtraction_parset, make_sourcedb_ch, di_calibration_ch, model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_BP_A" ) // apply solutions after subtracting Ateams
+        subtract_ateams_ch = SubtractSources ( msets_channel, params.ateams_subtraction_parset, make_sourcedb_ch, di_calibration_ch, model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_BP_A" ) // apply solutions after subtracting Ateams
 
         ApplyDI ( subtract_ateams_ch, make_sourcedb_ch, params.di_apply_parset,  di_calibration_ch, "SUBTRACTED_DATA_L2_BP_A", "CORRECTED_DATA_L2_BP_A" )
 
     emit:
 
         ApplyDI.out
-}
+        // true
+}   
 
 
 
@@ -109,9 +110,9 @@ workflow L2_B { //catalog model
         wsclean_ao_model
 
     main:
-
+        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ).collect {it}
         // Attenuate it
-        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_ao_model, params.ms, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_b.catalog' )
+        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_ao_model, msets_channel, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_b.catalog' )
 
         // Convert it to AO format
         ateam_bbs2model_ch = BBS2Model ( ateam_model_attenuate_ch.apparent_model, "apparent_ateam_sky_model_l2_b.ao" )
@@ -126,10 +127,10 @@ workflow L2_B { //catalog model
         full_sourcedb_format_model_ch = MakeSourceDB(full_dp3_format_model_ch, "full_sky_model_l2_b.sourcedb")
 
         // Run DI calibration
-        di_calibration_l2b_ch = DP3Calibrate ( params.ms, full_sourcedb_format_model_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b )
+        di_calibration_l2b_ch = DP3Calibrate ( msets_channel, full_sourcedb_format_model_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b )
 
         // Subtract Ateam sources
-        subtract_ateams_l2b_ch = SubtractSources( params.ms, params.ateams_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2b_ch, ateam_model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_BP_B" )
+        subtract_ateams_l2b_ch = SubtractSources( msets_channel, params.ateams_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2b_ch, ateam_model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_BP_B" )
 
         // Apply the Main field solutions
         ApplyDI ( subtract_ateams_l2b_ch, full_sourcedb_format_model_ch, params.di_apply_parset,  di_calibration_l2b_ch, "SUBTRACTED_DATA_L2_BP_B", "CORRECTED_DATA_L2_BP_B" )
@@ -144,9 +145,10 @@ workflow L2_C {
         wsclean_l2b_ao_model
 
     main:
-        
+        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ).collect {it}
+
          // Attenuate it
-        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_l2b_ao_model, params.ms, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_c.catalog' )
+        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_l2b_ao_model, msets_channel, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_c.catalog' )
 
         // Convert it to AO format
         ateam_bbs2model_ch = BBS2Model ( ateam_model_attenuate_ch.apparent_model, "apparent_ateam_sky_model_l2_c.ao" )
@@ -161,10 +163,10 @@ workflow L2_C {
         full_sourcedb_format_model_ch = MakeSourceDB(full_dp3_format_model_ch, "full_sky_model_l2_c.sourcedb")
 
         // Run DI calibration
-        di_calibration_l2b_ch = DP3Calibrate ( params.ms, full_sourcedb_format_model_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_c )
+        di_calibration_l2b_ch = DP3Calibrate ( msets_channel, full_sourcedb_format_model_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_c )
 
         // Subtract Ateam sources
-        subtract_ateams_l2b_ch = SubtractSources ( params.ms, params.ateams_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2b_ch, ateam_model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_BP_C" )
+        subtract_ateams_l2b_ch = SubtractSources ( msets_channel, params.ateams_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2b_ch, ateam_model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_BP_C" )
 
         // Apply the Main field solutions
         ApplyDI ( subtract_ateams_l2b_ch, full_sourcedb_format_model_ch, params.di_apply_parset,  di_calibration_l2b_ch, "SUBTRACTED_DATA_L2_BP_C", "CORRECTED_DATA_L2_BP_C" )
@@ -183,9 +185,10 @@ workflow L2_D {
         wsclean_l2c_ao_model
     
     main:
+        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ).collect {it}
         // params.minimum_patch_flux = 1 here
         // Attenuate the intrinsic 3C model. the wsclean model is just a workflow connector
-        attenuate_3c_model_ch = ModelToolAttenuate ( wsclean_l2c_ao_model, params.ms, params.minimum_elevation, params.minimum_3C_patch_flux, params.min_flux, params.intrinsic_3C_model, 'apparent_3c_sky_model_l2_d.catalog' )
+        attenuate_3c_model_ch = ModelToolAttenuate ( wsclean_l2c_ao_model, msets_channel, params.minimum_elevation, params.minimum_3C_patch_flux, params.min_flux, params.intrinsic_3C_model, 'apparent_3c_sky_model_l2_d.catalog' )
 
         // Convert it to AO format
         bbs2model_3c_ch = BBS2Model ( attenuate_3c_model_ch.apparent_model, "apparent_3c_sky_model_l2_d.ao" )
@@ -200,16 +203,16 @@ workflow L2_D {
         full_sourcedb_format_model_ch = MakeSourceDB ( convert_model_to_dp3_format_ch, "full_ncp_and_3c_sky_model_l2_d.sourcedb" )
 
         // Run DI calibration # this parset should change the solution interval and  minimum lambda cut
-        di_calibration_l2d_ch = DP3Calibrate ( params.ms, full_sourcedb_format_model_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_d )
+        di_calibration_l2d_ch = DP3Calibrate ( msets_channel, full_sourcedb_format_model_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_d )
 
         // Subtract 3C sources
-        SubtractSources ( params.ms, params.three_c_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2d_ch, attenuate_3c_model_ch.sources_to_subtract_file, "CORRECTED_DATA_L2_BP_C", "SUBTRACTED_DATA_L2_BP_D" )
+        SubtractSources ( msets_channel, params.three_c_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2d_ch, attenuate_3c_model_ch.sources_to_subtract_file, "CORRECTED_DATA_L2_BP_C", "SUBTRACTED_DATA_L2_BP_D" )
 
         // Image and convert output model from BBS to AO format #TODO: REMOVE THIS PART IF YOU WANT!
         WScleanImage ( subtract_3c_l2d_ch, "SUBTRACTED_DATA_L2_BP_D", "SW01_3c_subtracted_l2_d" )
 
-    emit:1/%YEAR%/%MONTH%/%OBS_ID%/L1/"
-
+    emit:
+    
         // WScleanImage.out.wsclean_ao_model
         SubtractSources.out
 }
@@ -241,6 +244,7 @@ workflow L3 {
         final_ncp_wsclean_ao_model
     
     main:
+        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ).collect {it}
 
         // Select sources within params.sky_model_radius degrees around params.fov_center
         source_selection_ch = SelectNearbySources (final_ncp_wsclean_ao_model, params.fov_center, params.sky_model_radius, "dd_ncp_sky_model_l3.ao")
@@ -255,13 +259,13 @@ workflow L3 {
         dd_sourcedb_format_model_ch = MakeSourceDB ( convert_dd_model_to_dp3_format_ch, "dd_ncp_sky_model_clustered_l3.sourcedb" )
 
         // Average the data
-        time_averaging_ch = AverageDataInTime ( dd_sourcedb_format_model_ch, params.ms, params.l3_averaged_ms_name, params.ntimesteps_to_average, "SUBTRACTED_DATA_L2_BP_D", "DATA")
+        time_averaging_ch = AverageDataInTime ( dd_sourcedb_format_model_ch, msets_channel, params.l3_averaged_ms_name, params.ntimesteps_to_average, "SUBTRACTED_DATA_L2_BP_D", "DATA")
 
         // Perform DD calibration on averaged data
         dd_calibration_l3_ch = DP3Calibrate ( time_averaging_ch, dd_sourcedb_format_model_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3 )
 
         // Subtract NCP using the dd solutions
-        SubtractSources ( params.ms, params.ncp_subtraction_parset, dd_sourcedb_format_model_ch, dd_calibration_l3_ch, params.ncp_clusters, "SUBTRACTED_DATA_L2_BP_D", "SUBTRACTED_DATA_L3" )
+        SubtractSources ( msets_channel, params.ncp_subtraction_parset, dd_sourcedb_format_model_ch, dd_calibration_l3_ch, params.ncp_clusters, "SUBTRACTED_DATA_L2_BP_D", "SUBTRACTED_DATA_L3" )
 
         // Image and convert output model from BBS to AO format #TODO: REMOVE THIS PART IF YOU WANT!
         WScleanImage ( subtract_ncp_l3_ch, "SUBTRACTED_DATA_L3", "SW01_ncp_subtracted_l3" )

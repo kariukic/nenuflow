@@ -22,9 +22,6 @@ params.datapath = null //"/data/users/lofareor/chege/nenufar/obs/L2_BP"
 // The nodes in which the msfiles are distributed
 params.hosts = null //"/home/users/chege/theleap/neap/test/pssh_hosts_list.txt"
 
-// this string is used by wsclean 
-// mses = readTxtIntoString (params.mslist)
-
 // TODO: Maybe read the ms, datapath and hosts params from the mslist param
 //TEST DATA
 // Copied from /net/node120/data/users/lofareor/nenufar/obs/L2_BP/20220508_200000_20220509_033100_NCP_COSMIC_DAWN/SW01.MS the took the first 240 timestamps for testing purposes
@@ -60,12 +57,12 @@ process DistributedCalibration {
 workflow {
 
     // l1_ch = Retrieve()
-    l2_ch = L1toL2( true ) //l1_ch 
-    // l2a_ch = Run_L2A( l2_ch )
-    // l2b_ch = Run_L2B( l2a_ch )
-    // l2c_ch = Run_L2C( l2b_ch )
-    // l2d_ch = Run_L2D( l2c_ch )
-    // l3_ch = Run_L3( l2d_ch )
+    // l2_ch = L1toL2( true ) //l1_ch 
+    l2a_ch = Run_L2A( true) // l2_ch
+    l2b_ch = Run_L2B( l2a_ch )
+    l2c_ch = Run_L2C( l2b_ch )
+    l2d_ch = Run_L2D( l2c_ch )
+    l3_ch = Run_L3( l2d_ch )
 
 }
 
@@ -87,6 +84,7 @@ workflow Retrieve {
 
 }
 
+
 workflow L1toL2 {
     take:
         l1_data_ready
@@ -99,13 +97,15 @@ workflow L1toL2 {
 }
 
 
-
 workflow Run_L2A {
     take:
         l2_data_available
 
     main:
         cal_l2a_ch = DistributedCalibration ( true, l2_data_available, params.ms, params.datapath, params.serial_neap, "L2_A", params.hosts )
+
+        // this string is used by wsclean 
+        mses = readTxtIntoString (params.mslist)
 
         WScleanImage ( cal_l2a_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_BP_A", "SW01_ateam_subtracted_l2_a" )
 
@@ -120,6 +120,9 @@ workflow Run_L2B {
     
     main:
         cal_l2b_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L2_B", params.hosts )
+
+        // this string is used by wsclean 
+        mses = readTxtIntoString (params.mslist)
 
         WScleanImage ( cal_l2b_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_BP_B", "SW01_ateam_subtracted_l2_b" )
 
@@ -136,6 +139,9 @@ workflow Run_L2C {
 
     main:
         cal_l2c_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L2_C", params.hosts )
+
+        // this string is used by wsclean 
+        mses = readTxtIntoString (params.mslist)
 
         WScleanImage ( cal_l2c_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_BP_C", "SW01_ateam_subtracted_l2_c" )
 
@@ -154,6 +160,9 @@ workflow Run_L2D {
     main:
         cal_l2d_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L2_D", params.hosts )
 
+        // this string is used by wsclean 
+        mses = readTxtIntoString (params.mslist)
+
         WScleanImage ( cal_l2d_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L2_BP_D", "SW01_3c_subtracted_l2_d" )
 
     emit:
@@ -168,6 +177,9 @@ workflow Run_L3 {
 
     main:
         cal_l3_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L3", params.hosts )
+
+        // this string is used by wsclean 
+        mses = readTxtIntoString (params.mslist)
 
         WScleanImage ( cal_l3_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L3", "SW01_ncp_subtracted_l3" )
 
@@ -193,7 +205,6 @@ process WScleanImage {
         path "*.fits"
         path "${image_name}-sources.ao", emit: wsclean_ao_model
 
-    // # make image size and the pixel size here a parameter, fit-spectral-pol
     shell:
         '''
         wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 5000 -scale !{scale} -size !{size} !{size} -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol !{spectral_pol_fit} !{mses} > wsclean_image.log

@@ -3,7 +3,7 @@ msout=.
 
 steps=[cal]
 cal.type=ddecal
-cal.mode=diagonal
+cal.mode=fulljones
 cal.solint=30
 cal.nchan=3
 cal.maxiter=50

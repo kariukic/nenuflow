@@ -75,31 +75,44 @@ workflow {
 }
 
 
-workflow L2_A { // catalog model
+workflow L2_A {
     take:
         start_ch
 
     main:
 
-        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ).collect {it}
-        main_field_model_ch = ModelToolBuild (msets_channel, params.catalog, params.min_flux, params.sky_model_radius, "main_field_intrinsic_model.txt")
+        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ) //.collect {it}
+        main_field_model_ch = ModelToolBuild (msets_channel.take(1), params.catalog, params.min_flux, params.sky_model_radius, "main_field_intrinsic_model.txt")
 
         ateams_ch = Channel.of( params.intrinsic_Ateam_model )
 
         model_attenuate_ch = ModelToolAttenuate ( true, msets_channel, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, main_field_model_ch.concat( ateams_ch ).collect(), 'apparent_sky_model_l2_a.catalog' )
 
-        make_sourcedb_ch = MakeSourceDB ( model_attenuate_ch.apparent_model, 'apparent_sky_model_l2_a.sourcedb' )
+        catalogs_ch = msets_channel.collect { it + "/apparent_sky_model_l2_a.catalog" }
 
-        di_calibration_ch = DP3Calibrate ( msets_channel, make_sourcedb_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
+        make_sourcedb_ch = MakeSourceDB ( model_attenuate_ch.apparent_model.collect(), catalogs_ch.flatten())
 
-        subtract_ateams_ch = SubtractSources ( msets_channel, params.ateams_subtraction_parset, make_sourcedb_ch, di_calibration_ch, model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_BP_A" ) // apply solutions after subtracting Ateams
+        sourcedbs_ch = msets_channel.collect { it + "/apparent_sky_model_l2_a.catalog.sourcedb" }
 
-        ApplyDI ( subtract_ateams_ch, make_sourcedb_ch, params.di_apply_parset,  di_calibration_ch, "SUBTRACTED_DATA_L2_BP_A", "CORRECTED_DATA_L2_BP_A" )
+        msets_and_sourcedbs_ch = msets_channel.flatten().merge( sourcedbs_ch.flatten() )
+
+        di_calibration_ch = DP3Calibrate (make_sourcedb_ch.collect(), msets_and_sourcedbs_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
+
+        solutions_ch =  msets_channel.collect { it + params.di_calibration_solutions_file_l2_a }
+
+        sources_to_subtract_ch = msets_channel.collect { it + "/apparent_sky_model_l2_a.catalog.txt" }
+
+        msets_sourcedbs_solutions_and_sources_to_subtract_ch = msets_and_sourcedbs_ch.merge( solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
+
+        subtract_ateams_ch = SubtractSources ( di_calibration_ch.collect(), msets_sourcedbs_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_BP_A" ) // apply solutions after subtracting Ateams
+
+        msets_sourcedbs_and_solutions_ch = msets_and_sourcedbs_ch.merge( solutions_ch.flatten() )
+
+        ApplyDI ( subtract_ateams_ch.collect(), msets_sourcedbs_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_BP_A", "CORRECTED_DATA_L2_BP_A" )
 
     emit:
 
         ApplyDI.out
-        // true
 }   
 
 

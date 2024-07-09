@@ -1,3 +1,5 @@
+numthreads=6
+
 msin.datacolumn=DATA
 msout=.
 

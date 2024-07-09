@@ -1,3 +1,5 @@
+numthreads=6
+
 msout=.
 steps=[apply]
 apply.type=applycal

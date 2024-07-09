@@ -1,0 +1,30 @@
+[obs_ids]
+20231208_213000_20231209_070000_NT04_COSMIC_DAWN = ['node130', 'node131']
+
+
+[spectral_windows]
+SW03 = [ 313, 371,]
+
+[data_level_path]
+L1 = "/net/%NODE%/data/users/lofareor/nenufar/obs/L1/"
+L2 = "/net/%NODE%/data/users/lofareor/nenufar/obs/L2/"
+L2_BP = "/net/%NODE%/data/users/lofareor/nenufar/obs/L2_BP/"
+L2_12C40S = "/net/%NODE%/data/users/lofareor/nenufar/obs/L2_12C40S/"
+
+[n2_obs_ids.20231208_NT04]
+n1_obs_ids = [ "20231208_213000_20231209_070000_NT04_COSMIC_DAWN"]
+nodes = "node101,node102,node103,node105,node110,node125,node126,node128,node129,node130"
+
+[l1_to_l2_config.L2]
+dppp_config = "/net/node130/data/users/lofareor/nenufar/nt/cal/dppp_l1_to_l2.parset"
+
+[l1_to_l2_config.L2_BP]
+dppp_config = "/home/users/chege/theleap/nenuflow/parsets/dppp_l1_to_l2_bp.parset"
+
+[l1_to_l2_config.L2_12C40S]
+dppp_config = "/net/node130/data/users/lofareor/nenufar/nt/cal/dppp_l1_to_l2_cyga.parset"
+
+[remote_hosts.databf]
+host = "databfnfr"
+level = "L1"
+data_path = "/data/nenufar-nri/LT01/%YEAR%/%MONTH%/%OBS_ID%/L1/"

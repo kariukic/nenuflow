@@ -5,3 +5,4 @@ report.*
 timeline.*
 *.pyc
 docs/build/
+*.config

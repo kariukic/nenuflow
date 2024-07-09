@@ -1,5 +1,6 @@
-msout=.
+numthreads=6
 
+msout=.
 
 steps=[sub]
 sub.type=h5parmpredict

@@ -157,7 +157,7 @@ process ConvertL1toL2 {
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 process ModelToolBuild {
-
+    errorStrategy 'ignore'
     input:
         path msin
         val catalog
@@ -177,7 +177,7 @@ process ModelToolBuild {
 
 // Combines multiple models and applys beam attenuation
 process ModelToolAttenuate {
-
+    publishDir "${full_ms_path}" , mode: 'copy'
     input:
         val ready
         path full_ms_path
@@ -201,18 +201,21 @@ process ModelToolAttenuate {
 
 // Make sourcedb sky model format given a different model catalog format
 process MakeSourceDB {
-
+    
     input:
-        path input_model
-        val sourcedb_name
+        val ready
+        val input_model
+        // val sourcedb_name
 
     output:
-        path("${sourcedb_name}", type: 'dir')
+        // path("${sourcedb_name}", type: 'dir')
+        val true
 
 
     shell:
         '''
-        makesourcedb in=!{input_model} out=!{sourcedb_name} > make_source_db.log
+        rm -rf !{input_model}.sourcedb
+        makesourcedb in=!{input_model} out=!{input_model}.sourcedb > make_source_db.log
         '''
 }
 
@@ -278,13 +281,14 @@ process DP3Calibrate {
     publishDir "${full_ms_path}" , mode: 'copy'
     // max memory allocation
     memory "${params.memory}"
+    cpus "${params.cpus}"
     // retry 4 times upon failure
-    errorStrategy 'retry'
-    maxRetries 3
+    // errorStrategy 'retry'
+    // maxRetries 3
 
     input:
-        path full_ms_path
-        path sourcedb_name
+        val ready
+        tuple path(full_ms_path), path(sourcedb_name)
         path dp3_cal_parset_file
         val output_calibration_solutions_file //.5 extension
 
@@ -306,10 +310,9 @@ process DP3Calibrate {
 process ApplyDI {
 
     input:
-        path full_ms_path
-        path sourcedb_name //apparent_node$j.sourcedb
+        val ready
+        tuple path(full_ms_path), path(sourcedb_name), path(calibration_solutions_file)
         path di_apply_parset_file
-        path calibration_solutions_file //.5 extension // full path
         val input_datacolumn
         val output_datacolumn
 
@@ -328,11 +331,9 @@ process ApplyDI {
 process SubtractSources {
 
     input:
-        path full_ms_path
+        val ready
+        tuple path(full_ms_path), path(sourcedb_name), path(calibration_solutions_file), path(sources_to_subtract_file)
         path subtraction_parset
-        path sourcedb_name
-        path calibration_solutions_file //.5 extension // full path
-        val sources_to_subtract_file
         val input_datacolumn
         val output_datacolumn
 

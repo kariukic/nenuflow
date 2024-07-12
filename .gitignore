@@ -5,4 +5,4 @@ report.*
 timeline.*
 *.pyc
 docs/build/
-*.config
+nextflow.config

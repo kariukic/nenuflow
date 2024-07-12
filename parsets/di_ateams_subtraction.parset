@@ -1,9 +1,6 @@
 numthreads=6
 
-msin.datacolumn=DATA
-
 msout=.
-msout.datacolumn=SUBTRACTED_DATA
 
 steps=[sub]
 sub.type=h5parmpredict

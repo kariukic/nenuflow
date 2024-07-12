@@ -98,14 +98,14 @@ workflow L2_A {
 
         di_calibration_ch = DP3Calibrate (make_sourcedb_ch.collect(), msets_and_sourcedbs_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
 
-        solutions_ch =  msets_channel.collect { it + params.di_calibration_solutions_file_l2_a }
+        solutions_ch =  msets_channel.collect { it + "/${params.di_calibration_solutions_file_l2_a}" }
 
         sources_to_subtract_ch = msets_channel.collect { it + "/apparent_sky_model_l2_a.catalog.txt" }
 
         msets_sourcedbs_solutions_and_sources_to_subtract_ch = msets_and_sourcedbs_ch.merge( solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
 
         subtract_ateams_ch = SubtractSources ( di_calibration_ch.collect(), msets_sourcedbs_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_BP_A" ) // apply solutions after subtracting Ateams
-
+        
         msets_sourcedbs_and_solutions_ch = msets_and_sourcedbs_ch.merge( solutions_ch.flatten() )
 
         ApplyDI ( subtract_ateams_ch.collect(), msets_sourcedbs_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_BP_A", "CORRECTED_DATA_L2_BP_A" )

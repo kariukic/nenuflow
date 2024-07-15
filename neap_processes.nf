@@ -1,5 +1,4 @@
 #!/usr/bin/env nextflow
-params.memory = "60 GB"
 
 process GetMSList {
     input:
@@ -279,10 +278,7 @@ process AO2DP3Model {
 // Given a DP3 DI parset run DDECAL DI calibration
 process DP3Calibrate {
     publishDir "${full_ms_path}" , mode: 'copy'
-    // max memory allocation
-    memory "${params.memory}"
-    cpus "${params.cpus}"
-    // retry 4 times upon failure
+    maxForks 5
     // errorStrategy 'retry'
     // maxRetries 3
 

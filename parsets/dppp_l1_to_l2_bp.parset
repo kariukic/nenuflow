@@ -1,0 +1,19 @@
+numthreads = 15
+verbose = true
+msin = 
+
+msout =
+msout.overwrite = true
+
+steps = [apply_bp,aoflag,averager]
+
+aoflag.strategy = /net/node130/data/users/lofareor/nenufar/nt/cal/nenufar_largebw_sens1.5_I.lua
+aoflag.memoryperc = 15
+averager.freqstep = 4
+apply_bp.type=applycal
+apply_bp.parmdb=/net/node130/data/users/lofareor/nenufar/nt/bp_cal_20240103_CASA.h5
+apply_bp.steps=[apply_amp,apply_phase]
+apply_bp.apply_amp.correction=amplitude000 
+apply_bp.apply_phase.correction=phase000 
+apply_bp.direction=[Main]
+

@@ -13,6 +13,7 @@ include {
     DP3Calibrate;
     SubtractSources;
     ApplyDI;
+    AOqualityCollect;
 } from './neap_processes.nf'
 
 params.stage = null
@@ -108,11 +109,13 @@ workflow L2_A {
         
         msets_sourcedbs_and_solutions_ch = msets_and_sourcedbs_ch.merge( solutions_ch.flatten() )
 
-        ApplyDI ( subtract_ateams_ch.collect(), msets_sourcedbs_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_A", "CORRECTED_DATA_L2_A" )
+        apply_di_ch = ApplyDI ( subtract_ateams_ch.collect(), msets_sourcedbs_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_A", "CORRECTED_DATA_L2_A" )
+
+        AOqualityCollect( apply_di_ch, msets_channel, "CORRECTED_DATA_L2_A" )
 
     emit:
 
-        ApplyDI.out
+        AOqualityCollect.out
 }   
 
 

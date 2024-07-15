@@ -107,7 +107,9 @@ workflow Run_L2A {
         // this string is used by wsclean 
         mses = readTxtIntoString (params.mslist)
 
-        WScleanImage ( cal_l2a_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "ateam_subtracted_l2_a" )
+        aoq_combine_ch = AOqualityCombine( cal_l2a_ch, mses, "aoqstats_l2a" )
+
+        WScleanImage ( aoq_combine_ch.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "ateam_subtracted_l2_a" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
@@ -210,5 +212,22 @@ process WScleanImage {
         wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 5000 -scale !{scale} -size !{size} !{size} -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol !{spectral_pol_fit} !{mses} > wsclean_image.log
 
         singularity exec --bind /net,/data !{params.container} bbs2model $(pwd)/!{image_name}-sources.txt $(pwd)/!{image_name}-sources.ao
+        '''
+}
+
+process AOqualityCombine {
+    publishDir "${params.datapath}/results/aoquality", mode: "copy"
+
+    input:
+        val ready
+        val mses
+        val output_name
+
+    output:
+        path "${output_name}.qs", type: 'dir'
+
+    shell:
+        '''
+        aoquality combine !{output_name}.qs !{mses} > aoquality_combine.log
         '''
 }

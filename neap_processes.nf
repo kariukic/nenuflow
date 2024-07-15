@@ -347,6 +347,23 @@ process SubtractSources {
         '''
 }
 
+// Collect data quality statistics
+process AOqualityCollect {
+    
+    input:
+        val ready
+        path full_ms_path
+        val data_column
+
+    output:
+        path "${full_ms_path}"
+
+    shell:
+        '''
+        aoquality collect -d !{data_column} !{full_ms_path}
+        '''
+}
+
 
 def readTxtIntoString (txt) {
     List tlist = file(txt).readLines()

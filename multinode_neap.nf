@@ -107,7 +107,7 @@ workflow Run_L2A {
         // this string is used by wsclean 
         mses = readTxtIntoString (params.mslist)
 
-        WScleanImage ( cal_l2a_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_BP_A", "ateam_subtracted_l2_a" )
+        WScleanImage ( cal_l2a_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "ateam_subtracted_l2_a" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
@@ -124,7 +124,7 @@ workflow Run_L2B {
         // this string is used by wsclean 
         mses = readTxtIntoString (params.mslist)
 
-        WScleanImage ( cal_l2b_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_BP_B", "ateam_subtracted_l2_b" )
+        WScleanImage ( cal_l2b_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "ateam_subtracted_l2_b" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
@@ -143,7 +143,7 @@ workflow Run_L2C {
         // this string is used by wsclean 
         mses = readTxtIntoString (params.mslist)
 
-        WScleanImage ( cal_l2c_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_BP_C", "ateam_subtracted_l2_c" )
+        WScleanImage ( cal_l2c_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_C", "ateam_subtracted_l2_c" )
 
     emit:
 
@@ -163,7 +163,7 @@ workflow Run_L2D {
         // this string is used by wsclean 
         mses = readTxtIntoString (params.mslist)
 
-        WScleanImage ( cal_l2d_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L2_BP_D", "3c_subtracted_l2_d" )
+        WScleanImage ( cal_l2d_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L2_D", "3c_subtracted_l2_d" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model

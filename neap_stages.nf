@@ -104,11 +104,11 @@ workflow L2_A {
 
         msets_sourcedbs_solutions_and_sources_to_subtract_ch = msets_and_sourcedbs_ch.merge( solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
 
-        subtract_ateams_ch = SubtractSources ( di_calibration_ch.collect(), msets_sourcedbs_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_BP_A" ) // apply solutions after subtracting Ateams
+        subtract_ateams_ch = SubtractSources ( di_calibration_ch.collect(), msets_sourcedbs_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_A" ) // apply solutions after subtracting Ateams
         
         msets_sourcedbs_and_solutions_ch = msets_and_sourcedbs_ch.merge( solutions_ch.flatten() )
 
-        ApplyDI ( subtract_ateams_ch.collect(), msets_sourcedbs_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_BP_A", "CORRECTED_DATA_L2_BP_A" )
+        ApplyDI ( subtract_ateams_ch.collect(), msets_sourcedbs_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_A", "CORRECTED_DATA_L2_A" )
 
     emit:
 
@@ -143,10 +143,10 @@ workflow L2_B { //catalog model
         di_calibration_l2b_ch = DP3Calibrate ( msets_channel, full_sourcedb_format_model_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b )
 
         // Subtract Ateam sources
-        subtract_ateams_l2b_ch = SubtractSources( msets_channel, params.ateams_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2b_ch, ateam_model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_BP_B" )
+        subtract_ateams_l2b_ch = SubtractSources( msets_channel, params.ateams_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2b_ch, ateam_model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_B" )
 
         // Apply the Main field solutions
-        ApplyDI ( subtract_ateams_l2b_ch, full_sourcedb_format_model_ch, params.di_apply_parset,  di_calibration_l2b_ch, "SUBTRACTED_DATA_L2_BP_B", "CORRECTED_DATA_L2_BP_B" )
+        ApplyDI ( subtract_ateams_l2b_ch, full_sourcedb_format_model_ch, params.di_apply_parset,  di_calibration_l2b_ch, "SUBTRACTED_DATA_L2_B", "CORRECTED_DATA_L2_B" )
 
     emit:
 
@@ -179,13 +179,13 @@ workflow L2_C {
         di_calibration_l2b_ch = DP3Calibrate ( msets_channel, full_sourcedb_format_model_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_c )
 
         // Subtract Ateam sources
-        subtract_ateams_l2b_ch = SubtractSources ( msets_channel, params.ateams_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2b_ch, ateam_model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_BP_C" )
+        subtract_ateams_l2b_ch = SubtractSources ( msets_channel, params.ateams_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2b_ch, ateam_model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_C" )
 
         // Apply the Main field solutions
-        ApplyDI ( subtract_ateams_l2b_ch, full_sourcedb_format_model_ch, params.di_apply_parset,  di_calibration_l2b_ch, "SUBTRACTED_DATA_L2_BP_C", "CORRECTED_DATA_L2_BP_C" )
+        ApplyDI ( subtract_ateams_l2b_ch, full_sourcedb_format_model_ch, params.di_apply_parset,  di_calibration_l2b_ch, "SUBTRACTED_DATA_L2_C", "CORRECTED_DATA_L2_C" )
 
         // Image and convert output model from BBS to AO format
-        // WScleanImage ( apply_di_l2c_ch, "CORRECTED_DATA_L2_BP_C", "SW01_ateam_subtracted_l2_c" )
+        // WScleanImage ( apply_di_l2c_ch, "CORRECTED_DATA_L2_C", "clean_ateam_sub_l2_c" )
 
     emit:
         // WScleanImage.out.wsclean_ao_model
@@ -219,10 +219,10 @@ workflow L2_D {
         di_calibration_l2d_ch = DP3Calibrate ( msets_channel, full_sourcedb_format_model_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_d )
 
         // Subtract 3C sources
-        SubtractSources ( msets_channel, params.three_c_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2d_ch, attenuate_3c_model_ch.sources_to_subtract_file, "CORRECTED_DATA_L2_BP_C", "SUBTRACTED_DATA_L2_BP_D" )
+        SubtractSources ( msets_channel, params.three_c_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2d_ch, attenuate_3c_model_ch.sources_to_subtract_file, "CORRECTED_DATA_L2_C", "SUBTRACTED_DATA_L2_D" )
 
         // Image and convert output model from BBS to AO format #TODO: REMOVE THIS PART IF YOU WANT!
-        WScleanImage ( subtract_3c_l2d_ch, "SUBTRACTED_DATA_L2_BP_D", "SW01_3c_subtracted_l2_d" )
+        WScleanImage ( subtract_3c_l2d_ch, "SUBTRACTED_DATA_L2_D", "clean_3c_sub_l2_d" )
 
     emit:
     
@@ -272,16 +272,16 @@ workflow L3 {
         dd_sourcedb_format_model_ch = MakeSourceDB ( convert_dd_model_to_dp3_format_ch, "dd_ncp_sky_model_clustered_l3.sourcedb" )
 
         // Average the data
-        time_averaging_ch = AverageDataInTime ( dd_sourcedb_format_model_ch, msets_channel, params.l3_averaged_ms_name, params.ntimesteps_to_average, "SUBTRACTED_DATA_L2_BP_D", "DATA")
+        time_averaging_ch = AverageDataInTime ( dd_sourcedb_format_model_ch, msets_channel, params.l3_averaged_ms_name, params.ntimesteps_to_average, "SUBTRACTED_DATA_L2_D", "DATA")
 
         // Perform DD calibration on averaged data
         dd_calibration_l3_ch = DP3Calibrate ( time_averaging_ch, dd_sourcedb_format_model_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3 )
 
         // Subtract NCP using the dd solutions
-        SubtractSources ( msets_channel, params.ncp_subtraction_parset, dd_sourcedb_format_model_ch, dd_calibration_l3_ch, params.ncp_clusters, "SUBTRACTED_DATA_L2_BP_D", "SUBTRACTED_DATA_L3" )
+        SubtractSources ( msets_channel, params.ncp_subtraction_parset, dd_sourcedb_format_model_ch, dd_calibration_l3_ch, params.ncp_clusters, "SUBTRACTED_DATA_L2_D", "SUBTRACTED_DATA_L3" )
 
         // Image and convert output model from BBS to AO format #TODO: REMOVE THIS PART IF YOU WANT!
-        WScleanImage ( subtract_ncp_l3_ch, "SUBTRACTED_DATA_L3", "SW01_ncp_subtracted_l3" )
+        WScleanImage ( subtract_ncp_l3_ch, "SUBTRACTED_DATA_L3", "clean_ncp_sub_l3" )
 
     emit:
         // WScleanImage.out.wsclean_ao_model

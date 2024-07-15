@@ -371,3 +371,10 @@ def readTxtIntoString (txt) {
 
     return tstring
 }
+
+def readTxtAndAppendString (txt, str) {
+    List tlist = file(txt).readLines()
+    String tstring = tlist.collect {"${it}" + str}.join(" ")
+
+    return tstring
+}

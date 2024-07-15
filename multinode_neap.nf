@@ -5,6 +5,7 @@ include {
     RetrieveData;
     ConvertL1toL2;
     readTxtIntoString;
+    readTxtAndAppendString;
 } from "./neap_processes.nf"
 
 // All logs for the run will be stored here
@@ -103,13 +104,15 @@ workflow Run_L2A {
 
     main:
         cal_l2a_ch = DistributedCalibration ( true, l2_data_available, params.ms, params.datapath, params.serial_neap, "L2_A", params.hosts )
+        
+        mses = readTxtIntoString ( params.mslist )
+        solution_files = readTxtAndAppendString(params.mslist, "/${params.di_calibration_solutions_file_l2_a}")
 
-        // this string is used by wsclean 
-        mses = readTxtIntoString (params.mslist)
+        sols_collect_ch = H5ParmCollect( cal_l2a_ch, solution_files, "di_l2_a_combined_solutions")
 
-        aoq_combine_ch = AOqualityCombine( cal_l2a_ch, mses, "aoqstats_l2a" )
+        aoq_comb_ch = AOqualityCombine( sols_collect_ch.comb_sols, mses, "aoqstats_l2a" )
 
-        WScleanImage ( aoq_combine_ch.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "ateam_subtracted_l2_a" )
+        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "ateam_subtracted_l2_a" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
@@ -190,7 +193,7 @@ workflow Run_L3 {
 
 }
 
-//WSclean image
+// WSclean image
 process WScleanImage {
     publishDir "${params.datapath}/results/images", pattern: "*.fits", mode: "move", overwrite: true
 
@@ -224,10 +227,32 @@ process AOqualityCombine {
         val output_name
 
     output:
-        path "${output_name}.qs", type: 'dir'
+        path "${output_name}.qs", type: 'dir', emit: qstats
+        path 'stats.png'
 
     shell:
         '''
         aoquality combine !{output_name}.qs !{mses} > aoquality_combine.log
+        python3 !{projectDir}/templates/plot_aoqstats.py -q !{output_name}.qs >> aoquality_combine.log
+        '''
+}
+
+process H5ParmCollect {
+    publishDir "${params.datapath}/results/solutions"
+    publishDir "${params.datapath}/results/solutions", pattern: "*.png"
+
+    input:
+        val ready
+        val solution_files
+        val output_name
+
+    output:
+        path "${output_name}.h5", emit: comb_sols
+        path "*.png"
+
+    shell:
+        '''
+        H5parm_collector.py !{solution_files} -o !{output_name}.h5 > h5parm_collect.log
+        soltool plot --plot_dir $(pwd) !{output_name}.h5 >> h5parm_collect.log
         '''
 }

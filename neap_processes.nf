@@ -1,5 +1,4 @@
 #!/usr/bin/env nextflow
-params.memory = "60 GB"
 
 process GetMSList {
     input:
@@ -279,10 +278,7 @@ process AO2DP3Model {
 // Given a DP3 DI parset run DDECAL DI calibration
 process DP3Calibrate {
     publishDir "${full_ms_path}" , mode: 'copy'
-    // max memory allocation
-    memory "${params.memory}"
-    cpus "${params.cpus}"
-    // retry 4 times upon failure
+    maxForks 5
     // errorStrategy 'retry'
     // maxRetries 3
 
@@ -347,10 +343,34 @@ process SubtractSources {
         '''
 }
 
+// Collect data quality statistics
+process AOqualityCollect {
+    
+    input:
+        val ready
+        path full_ms_path
+        val data_column
+
+    output:
+        path "${full_ms_path}"
+
+    shell:
+        '''
+        aoquality collect -d !{data_column} !{full_ms_path}
+        '''
+}
+
 
 def readTxtIntoString (txt) {
     List tlist = file(txt).readLines()
     String tstring = tlist.collect {"${it}"}.join(" ")
+
+    return tstring
+}
+
+def readTxtAndAppendString (txt, str) {
+    List tlist = file(txt).readLines()
+    String tstring = tlist.collect {"${it}" + str}.join(" ")
 
     return tstring
 }

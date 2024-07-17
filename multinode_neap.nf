@@ -73,7 +73,7 @@ workflow {
     // l1_ch = Retrieve()
     // l2_ch = L1toL2( l1_ch  ) //
     l2a_ch = Run_L2A( true ) //
-    // l2b_ch = Run_L2B( '/home/users/chege/NT04/work/2c/b8cfd1d3ee32b16c68d8256b6e362a/ateam_subtracted_l2_a-sources.ao' ) //l2a_ch
+    l2b_ch = Run_L2B( l2a_ch )
     // l2c_ch = Run_L2C( l2b_ch )
     // l2d_ch = Run_L2D( l2c_ch )
     // l3_ch = Run_L3( l2d_ch )

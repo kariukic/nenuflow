@@ -200,7 +200,8 @@ process ModelToolAttenuate {
 
 // Make sourcedb sky model format given a different model catalog format
 process MakeSourceDB {
-    
+    label 'default'
+
     input:
         val ready
         val input_model
@@ -218,11 +219,13 @@ process MakeSourceDB {
         '''
 }
 
-
 //Convert bbs to AO format
 process BBS2Model {
+    label 'sing'
+    publishDir "${file(input_model).getParent()}" , mode: 'copy'
 
     input:
+        val ready
         val input_model
         val output_model
 
@@ -232,55 +235,57 @@ process BBS2Model {
 
     shell:
         '''
-        singularity exec --bind /net,/data !{params.container} bbs2model /net/$(hostname)/!{input_model} /net/$(hostname)/$(pwd)/!{output_model}
+        bbs2model !{input_model} !{output_model}
         '''
 }
 
 
 //Use editmodel tool to combine multiple AO format models
 process Combine2AOModels {
+    label 'sing'
+    publishDir "${file(input_model1).getParent()}" , mode: 'copy'
 
     input:
-        path input_model1
-        path input_model2
+        val ready
+        tuple val(input_model1), val(input_model2)
         val output_model
 
     output:
         path "${output_model}"
 
-
     shell:
         '''
-        singularity exec --bind /net,/data !{params.container} editmodel -m /net/$(hostname)/$(pwd)/!{output_model} /net/$(hostname)/$(pwd)/!{input_model1} /net/$(hostname)/$(pwd)/!{input_model2}
+        editmodel -m !{output_model} !{input_model1} !{input_model2}
         '''
 }
 
 
 //Convert AO to DP3 format
 process AO2DP3Model {
+    label 'sing'
+    publishDir "${file(input_model).getParent()}" , mode: 'copy'
 
     input:
-        path input_model
+        val ready
+        val input_model
         val output_model
 
     output:
         path "${output_model}"
 
-
     shell:
         '''
-        singularity exec --bind /net,/data !{params.container} editmodel -dppp-model /net/$(hostname)/$(pwd)/!{output_model} /net/$(hostname)/$(pwd)/!{input_model}
-        python3 !{projectDir}/templates/change_patch_name.py -i /net/$(hostname)/$(pwd)/!{output_model} -x no_patch -y Main
+        editmodel -dppp-model !{output_model} !{input_model}
+        python3 !{projectDir}/templates/change_patch_name.py -i !{output_model} -x no_patch -y Main
         '''
 }
 
 
 // Given a DP3 DI parset run DDECAL DI calibration
 process DP3Calibrate {
+    label 'default'
     publishDir "${full_ms_path}" , mode: 'copy'
     maxForks 5
-    // errorStrategy 'retry'
-    // maxRetries 3
 
     input:
         val ready

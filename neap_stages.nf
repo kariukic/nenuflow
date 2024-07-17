@@ -82,7 +82,7 @@ workflow L2_A {
 
     main:
 
-        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ) //.collect {it}
+        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' )
         main_field_model_ch = ModelToolBuild (msets_channel.take(1), params.catalog, params.min_flux, params.sky_model_radius, "main_field_intrinsic_model.txt")
 
         ateams_ch = Channel.of( params.intrinsic_Ateam_model )
@@ -119,8 +119,69 @@ workflow L2_A {
 }   
 
 
-
 workflow L2_B { //catalog model
+
+    take:
+        wsclean_ao_model
+
+    main:
+
+        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' )
+
+        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_ao_model, msets_channel, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_b.catalog' )
+
+        all_ateam_model_attenuate_ch = msets_channel.collect { it + "/ateam_sky_model_l2_b.catalog" }
+
+        // Convert apparent A-team model to AO format
+        ateam_bbs2model_ch = BBS2Model ( ateam_model_attenuate_ch.apparent_model.collect(), all_ateam_model_attenuate_ch.flatten(), "apparent_ateam_sky_model_l2_b.ao" )
+
+        all_ateam_bbs2model_ch = msets_channel.collect { it + "/apparent_ateam_sky_model_l2_b.ao" }
+
+        // Combine apparent A-team model with the apparent WSclean model
+        wsclean_ao_model_ch = channel.of( wsclean_ao_model )
+        full_ao_format_model_ch = Combine2AOModels(ateam_bbs2model_ch.collect(), all_ateam_bbs2model_ch.flatten().combine( wsclean_ao_model_ch ), "full_sky_model_l2_b.ao")
+
+        all_full_ao_format_model_ch = msets_channel.collect { it + "/full_sky_model_l2_b.ao" }
+
+        // Convert the combined model from dp3 format to sourceDB format
+        full_dp3_format_model_ch = AO2DP3Model(full_ao_format_model_ch.collect(), all_full_ao_format_model_ch.flatten(), "full_sky_model_l2_b.skymodel")
+
+        all_full_dp3_format_model_ch = msets_channel.collect { it + "/full_sky_model_l2_b.skymodel" }
+
+        // Convert the combined model from dp3 format to sourceDB format
+        full_sourcedb_format_model_ch = MakeSourceDB(full_dp3_format_model_ch.collect(), all_full_dp3_format_model_ch.flatten())
+
+        all_full_sourcedb_format_model_ch = msets_channel.collect { it + "/full_sky_model_l2_b.skymodel.sourcedb" }
+
+        msets_and_sourcedbs_l2b_ch = msets_channel.flatten().merge( all_full_sourcedb_format_model_ch.flatten() )
+
+        // Run DI calibration
+        di_calibration_l2b_ch = DP3Calibrate ( full_sourcedb_format_model_ch.collect(), msets_and_sourcedbs_l2b_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b )
+
+
+        solutions_ch =  msets_channel.collect { it + "/${params.di_calibration_solutions_file_l2_b}" }
+
+        sources_to_subtract_ch = msets_channel.collect { it + "/ateam_sky_model_l2_b.catalog.txt" }
+
+        msets_sourcedbs_solutions_and_sources_to_subtract_ch = msets_and_sourcedbs_l2b_ch.merge( solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
+
+        subtract_ateams_ch = SubtractSources ( di_calibration_l2b_ch.collect(), msets_sourcedbs_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_B" )
+
+        msets_sourcedbs_and_solutions_ch = msets_and_sourcedbs_l2b_ch.merge( solutions_ch.flatten() )
+
+        apply_di_ch = ApplyDI ( subtract_ateams_ch.collect(), msets_sourcedbs_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_B", "CORRECTED_DATA_L2_B" )
+
+        AOqualityCollect( apply_di_ch, msets_channel, "CORRECTED_DATA_L2_B" )
+
+    emit:
+
+        AOqualityCollect.out
+
+}
+
+
+
+workflow L2_B_old { //catalog model
 
     take:
         wsclean_ao_model

@@ -31,49 +31,60 @@ params.hosts = null //"/home/users/chege/theleap/neap/test/pssh_hosts_list.txt"
 params.obsid=null // "20231208_NT04"
 
 
-process DistributedCalibration {
+import groovy.json.JsonOutput
+process GetParams {
     debug true
-    // errorStrategy 'ignore'
+    publishDir params.logs_dir, mode: 'copy'
 
     input:
-    val ready
-    val ch_in
-    val ms
-    val datapath
-    val serial_neap
-    val entry
-    path pssh_hosts
+        val stage
 
     output:
-    val true
+        path "${stage}_params.json", emit: params_file
+        val true, emit: params_json_written
 
     script:
-    """
-    pssh -v -i -h ${pssh_hosts} -t 0 -x "cd ${datapath}; bash" nextflow run ${serial_neap} --ms ${ms} --stage ${entry} --ch_in ${ch_in} > ${params.logs_dir}/${entry}_try.log 2>&1
-    """
+        """
+        echo '${JsonOutput.prettyPrint(JsonOutput.toJson(params))}' > ${stage}_params.json
+        """
 }
 
-//H5parm_collector.py
-//soltool plot
-workflow {
 
+process DistributedCalibration {
+    debug true
+
+    input:
+        val ready
+        val ch_in
+        val entry
+        val params_file
+
+    output:
+        val true
+
+    script:
+        """
+        pssh -v -i -h ${params.hosts} -t 0 -x "cd ${params.datapath}; bash" nextflow run ${params.serial_neap} --stage ${entry} --ch_in ${ch_in} -params-file ${params_file} > ${params.logs_dir}/${entry}_try.log 2>&1
+        """
+}
+
+
+workflow {
     // l1_ch = Retrieve()
     // l2_ch = L1toL2( l1_ch  ) //
-    l2a_ch = Run_L2A( true ) // 
-    // l2b_ch = Run_L2B( l2a_ch )
+    l2a_ch = Run_L2A( true ) //
+    // l2b_ch = Run_L2B( '/home/users/chege/NT04/work/2c/b8cfd1d3ee32b16c68d8256b6e362a/ateam_subtracted_l2_a-sources.ao' ) //l2a_ch
     // l2c_ch = Run_L2C( l2b_ch )
     // l2d_ch = Run_L2D( l2c_ch )
     // l3_ch = Run_L3( l2d_ch )
 
 }
 
-// Run AOFLagger for post-calibration RFI Flagging
-// Run AOquality collect to  get the Aoquality statistics
+// TODO: Run AOFLagger for post-calibration RFI Flagging
 
 // For pspipe list all MS in time in one line
     // steps:
     // create mslist with the observation_id as the name of the file. observationId use date_field_spectralwindow
-    // 
 
 
 workflow Retrieve {
@@ -103,8 +114,10 @@ workflow Run_L2A {
         l2_data_available
 
     main:
-        cal_l2a_ch = DistributedCalibration ( true, l2_data_available, params.ms, params.datapath, params.serial_neap, "L2_A", params.hosts )
-        
+        l2a_params_ch = GetParams( 'l2a' )
+
+        cal_l2a_ch = DistributedCalibration ( true, l2_data_available, "L2_A", l2a_params_ch.params_file)
+
         mses = readTxtIntoString ( params.mslist )
         solution_files = readTxtAndAppendString(params.mslist, "/${params.di_calibration_solutions_file_l2_a}")
 
@@ -124,12 +137,18 @@ workflow Run_L2B {
         wsclean_ao_model
     
     main:
-        cal_l2b_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L2_B", params.hosts )
+        l2b_params_ch = GetParams( 'l2b' )
 
-        // this string is used by wsclean 
-        mses = readTxtIntoString (params.mslist)
+        cal_l2b_ch = DistributedCalibration ( true, wsclean_ao_model, "L2_B", l2b_params_ch.params_file )
 
-        WScleanImage ( cal_l2b_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "ateam_subtracted_l2_b" )
+        mses = readTxtIntoString ( params.mslist )
+        solution_files = readTxtAndAppendString(params.mslist, "/${params.di_calibration_solutions_file_l2_b}")
+
+        sols_collect_ch = H5ParmCollect( cal_l2b_ch, solution_files, "di_l2_b_combined_solutions")
+
+        aoq_comb_ch = AOqualityCombine( sols_collect_ch.comb_sols, mses, "aoqstats_l2b" )
+
+        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "ateam_subtracted_l2_b" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
@@ -195,6 +214,7 @@ workflow Run_L3 {
 
 // WSclean image
 process WScleanImage {
+    label 'sing'
     publishDir "${params.datapath}/results/images", pattern: "*.fits", mode: "move", overwrite: true
 
     input:
@@ -214,7 +234,7 @@ process WScleanImage {
         '''
         wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 5000 -scale !{scale} -size !{size} !{size} -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol !{spectral_pol_fit} !{mses} > wsclean_image.log
 
-        singularity exec --bind /net,/data !{params.container} bbs2model $(pwd)/!{image_name}-sources.txt $(pwd)/!{image_name}-sources.ao
+        bbs2model !{image_name}-sources.txt !{image_name}-sources.ao
         '''
 }
 
@@ -228,18 +248,18 @@ process AOqualityCombine {
 
     output:
         path "${output_name}.qs", type: 'dir', emit: qstats
-        path 'stats.png'
+        path "${output_name}.png"
 
     shell:
         '''
         aoquality combine !{output_name}.qs !{mses} > aoquality_combine.log
-        python3 !{projectDir}/templates/plot_aoqstats.py -q !{output_name}.qs >> aoquality_combine.log
+        python3 !{projectDir}/templates/plot_aoqstats.py -q !{output_name}.qs -o !{output_name}.png >> aoquality_combine.log
         '''
 }
 
 process H5ParmCollect {
-    publishDir "${params.datapath}/results/solutions"
-    publishDir "${params.datapath}/results/solutions", pattern: "*.png"
+    publishDir "${params.datapath}/results/solutions/${output_name}"
+    publishDir "${params.datapath}/results/solutions/${output_name}", pattern: "*.png"
 
     input:
         val ready

@@ -19,8 +19,11 @@ process GetMSList {
 }
 
 process SelectNearbySources {
+    label 'sing'
+    publishDir "${file(input_model).getParent()}" , mode: 'copy'
+    
     input:
-        path input_model
+        val input_model
         val fov_center_coords
         val radius
         val output_model
@@ -31,12 +34,14 @@ process SelectNearbySources {
 
     shell:
         '''
-        singularity exec --bind /net,/data !{params.container} editmodel -m /net/$(hostname)/$(pwd)/!{output_model} -near !{fov_center_coords} !{radius} /net/$(hostname)/$(pwd)/!{input_model}
+        editmodel -m !{output_model} -near !{fov_center_coords} !{radius} !{input_model}
         '''
 }
 
 
 process MakeClusters {
+    label 'sing'
+
     input:
         path input_model
         val number_of_clusters
@@ -47,22 +52,23 @@ process MakeClusters {
     
     shell:
         '''
-        singularity exec --bind /net,/data !{params.container} cluster /net/$(hostname)/$(pwd)/!{input_model} /net/$(hostname)/$(pwd)/!{output_model} !{number_of_clusters}
+        cluster !{input_model} !{output_model} !{number_of_clusters}
         '''
 }
 
 
 process AverageDataInTime {
+
     input:
         val ready
-        path msin
-        val msout
+        tuple path(msin), val(msout)
         val timesteps_to_average
         val input_datacolumn
         val output_datacolumn
 
     output:
-    path "${msout}"
+        // path "${msout}"
+        val true
 
     shell:
         '''
@@ -208,8 +214,9 @@ process MakeSourceDB {
         // val sourcedb_name
 
     output:
-        // path("${sourcedb_name}", type: 'dir')
-        val true
+        val "${input_model}.sourcedb"
+        // path("${input_model}.sourcedb", type: 'dir')
+        // val true
 
 
     shell:
@@ -219,7 +226,19 @@ process MakeSourceDB {
         '''
 }
 
-//Convert bbs to AO format
+
+/*
+Convert bbs to AO format
+The Format seems to only work if Type comes before Patch 
+Also only a single SpectralIndex coefficient works
+The patch names should not have a space e.g "3C10" not "3C 10"
+And no space before the first comman in the patch lines
+e.g.
+
+FORMAT = Name, Type, Patch, Ra, Dec, I, Q, U, V, ReferenceFrequency='60000000.0', SpectralIndex='[0.0]', MajorAxis, MinorAxis, Orientation
+, , 3C 10, 0:00:00.0000, 0.00.00.0000
+0025.6+6410, GAUSSIAN, 3C 10, 0:25:37.32, 64.10.24.384, 89.82, 0.0, 0.0, 0.0, 60000000.0, [-0.7], 242.2, 101.7, 140.6
+*/ 
 process BBS2Model {
     label 'sing'
     publishDir "${file(input_model).getParent()}" , mode: 'copy'
@@ -347,6 +366,7 @@ process SubtractSources {
         DP3 !{subtraction_parset} msin=!{full_ms_path} sub.applycal.parmdb=!{calibration_solutions_file} sub.sourcedb=!{sourcedb_name} sub.directions=${directions_to_subtract} msin.datacolumn=!{input_datacolumn} msout.datacolumn=!{output_datacolumn}> di_sub.log
         '''
 }
+
 
 // Collect data quality statistics
 process AOqualityCollect {

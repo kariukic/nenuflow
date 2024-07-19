@@ -24,9 +24,6 @@ params.datapath = null //"/data/users/lofareor/chege/nenufar/obs/L2_BP"
 params.hosts = null //"/home/users/chege/theleap/neap/test/pssh_hosts_list.txt"
 
 // TODO: Maybe read the ms, datapath and hosts params from the mslist param
-//TEST DATA
-// Copied from /net/node120/data/users/lofareor/nenufar/obs/L2_BP/20220508_200000_20220509_033100_NCP_COSMIC_DAWN/SW01.MS the took the first 240 timestamps for testing purposes
-//"/net/node[114..115]/data/users/lofareor/chege/nenufar/obs/L2_BP/SW01_16min.MS"
 
 params.obsid=null // "20231208_NT04"
 
@@ -41,7 +38,7 @@ process GetParams {
 
     output:
         path "${stage}_params.json", emit: params_file
-        val true, emit: params_json_written
+        val true, emit: params_standby
 
     script:
         """
@@ -72,11 +69,10 @@ process DistributedCalibration {
 workflow {
     // l1_ch = Retrieve()
     // l2_ch = L1toL2( l1_ch  ) //
-    l2a_ch = Run_L2A( true ) //
+    l2a_ch = Run_L2A( true )
     l2b_ch = Run_L2B( l2a_ch )
-    // l2c_ch = Run_L2C( l2b_ch )
-    // l2d_ch = Run_L2D( l2c_ch )
-    // l3_ch = Run_L3( l2d_ch )
+    l2c_ch = Run_L2C( l2b_ch )
+    l3_ch = Run_L3( l2c_ch )
 
 }
 
@@ -88,6 +84,7 @@ workflow {
 
 
 workflow Retrieve {
+
     main:
         RetrieveData( true, params.remote_host, params.obsid, params.config_file )
 
@@ -96,8 +93,8 @@ workflow Retrieve {
 
 }
 
-
 workflow L1toL2 {
+
     take:
         l1_data_ready
 
@@ -110,22 +107,26 @@ workflow L1toL2 {
 
 
 workflow Run_L2A {
+
     take:
+
         l2_data_available
 
     main:
+
         l2a_params_ch = GetParams( 'l2a' )
 
-        cal_l2a_ch = DistributedCalibration ( true, l2_data_available, "L2_A", l2a_params_ch.params_file)
+        cal_l2a_ch = DistributedCalibration ( l2a_params_ch.params_standby, l2_data_available, "L2_A", l2a_params_ch.params_file)
 
         mses = readTxtIntoString ( params.mslist )
+
         solution_files = readTxtAndAppendString(params.mslist, "/${params.di_calibration_solutions_file_l2_a}")
 
         sols_collect_ch = H5ParmCollect( cal_l2a_ch, solution_files, "di_l2_a_combined_solutions")
 
-        aoq_comb_ch = AOqualityCombine( sols_collect_ch.comb_sols, mses, "aoqstats_l2a" )
+        aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2a" )
 
-        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "ateam_subtracted_l2_a" )
+        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "l2_a_ateam_subtracted" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
@@ -137,59 +138,47 @@ workflow Run_L2B {
         wsclean_ao_model
     
     main:
+
         l2b_params_ch = GetParams( 'l2b' )
 
-        cal_l2b_ch = DistributedCalibration ( true, wsclean_ao_model, "L2_B", l2b_params_ch.params_file )
+        cal_l2b_ch = DistributedCalibration ( l2b_params_ch.params_standby, wsclean_ao_model, "L2_B", l2b_params_ch.params_file )
 
         mses = readTxtIntoString ( params.mslist )
+
         solution_files = readTxtAndAppendString(params.mslist, "/${params.di_calibration_solutions_file_l2_b}")
 
         sols_collect_ch = H5ParmCollect( cal_l2b_ch, solution_files, "di_l2_b_combined_solutions")
 
-        aoq_comb_ch = AOqualityCombine( sols_collect_ch.comb_sols, mses, "aoqstats_l2b" )
+        aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2b" )
 
-        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "ateam_subtracted_l2_b" )
+        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "l2_b_ateam_subtracted" )
 
     emit:
         model = WScleanImage.out.wsclean_ao_model
 
 }
-
 
 workflow Run_L2C {
-
     take:
         wsclean_ao_model
 
     main:
-        cal_l2c_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L2_C", params.hosts )
+        l2c_params_ch = GetParams( 'l2c' )
 
-        // this string is used by wsclean 
-        mses = readTxtIntoString (params.mslist)
+        cal_l2c_ch = DistributedCalibration ( l2c_params_ch.params_standby, wsclean_ao_model, "L2_C", l2c_params_ch.params_file )
 
-        WScleanImage ( cal_l2c_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_C", "ateam_subtracted_l2_c" )
+        mses = readTxtIntoString ( params.mslist )
 
-    emit:
+        solution_files = readTxtAndAppendString(params.mslist, "/${params.di_calibration_solutions_file_l2_c}")
 
-        model = WScleanImage.out.wsclean_ao_model
+        sols_collect_ch = H5ParmCollect( cal_l2c_ch, solution_files, "di_l2_c_combined_solutions")
 
-}
+        aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2c" )
 
-
-workflow Run_L2D {
-    take:
-        wsclean_ao_model
-    
-
-    main:
-        cal_l2d_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L2_D", params.hosts )
-
-        // this string is used by wsclean 
-        mses = readTxtIntoString (params.mslist)
-
-        WScleanImage ( cal_l2d_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L2_D", "3c_subtracted_l2_d" )
+        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L2_C", "l2_c_3c_subtracted" )
 
     emit:
+
         model = WScleanImage.out.wsclean_ao_model
     
 }
@@ -200,14 +189,23 @@ workflow Run_L3 {
         wsclean_ao_model
 
     main:
-        cal_l3_ch = DistributedCalibration ( true, wsclean_ao_model, params.ms, params.datapath, params.serial_neap, "L3", params.hosts )
 
-        // this string is used by wsclean 
-        mses = readTxtIntoString (params.mslist)
+        l3_params_ch = GetParams( 'l3' )
 
-        WScleanImage ( cal_l3_ch, mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L3", "ncp_subtracted_l3" )
+        cal_l3_ch = DistributedCalibration ( l3_params_ch.params_standby, wsclean_ao_model, "L3", l3_params_ch.params_file )
+
+        mses = readTxtIntoString ( params.mslist )
+
+        String solution_files = file(params.mslist).readLines().collect { it.toString().strip().replace(params.ms, "${params.ms}_L3") }.join("/${params.dd_calibration_solutions_file_l3} ") + "/${params.dd_calibration_solutions_file_l3}"
+
+        sols_collect_ch = H5ParmCollect( cal_l3_ch, solution_files, "dd_l3_combined_solutions")
+
+        aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l3" )
+
+        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L3", "l3_ncp_subtracted" )
 
     emit:
+
         model = WScleanImage.out.wsclean_ao_model
 
 }
@@ -267,7 +265,7 @@ process H5ParmCollect {
         val output_name
 
     output:
-        path "${output_name}.h5", emit: comb_sols
+        path "${output_name}.h5", emit: combined_sols
         path "*.png"
 
     shell:

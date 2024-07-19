@@ -22,8 +22,6 @@ params.ch_in = null
 
 params.ms = null
 
-params.l3_averaged_ms_name = null
-
 
 //##############################################
 //WORKFLOW: L2
@@ -60,12 +58,6 @@ workflow {
 
     }
 
-    if ( params.stage == "L2_D" ) {
-
-        L2_D ( params.ch_in )
-
-    }
-
     if ( params.stage == "L3" ) {
 
         L3 ( params.ch_in )
@@ -77,101 +69,102 @@ workflow {
 
 
 workflow L2_A {
+
     take:
+
         start_ch
 
     main:
 
-        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' )
-        main_field_model_ch = ModelToolBuild (msets_channel.take(1), params.catalog, params.min_flux, params.sky_model_radius, "main_field_intrinsic_model.txt")
+        mset_ch = channel.fromPath( "${params.ms}_T*.MS", glob: true, checkIfExists: true, type: 'dir' )
+        main_field_model_ch = ModelToolBuild (mset_ch.take(1), params.catalog, params.min_flux, params.sky_model_radius, "main_field_intrinsic_model.txt")
 
         ateams_ch = Channel.of( params.intrinsic_Ateam_model )
 
-        model_attenuate_ch = ModelToolAttenuate ( true, msets_channel, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, main_field_model_ch.concat( ateams_ch ).collect(), 'apparent_sky_model_l2_a.catalog' )
+        model_attenuate_ch = ModelToolAttenuate ( true, mset_ch, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, main_field_model_ch.concat( ateams_ch ).collect(), 'apparent_sky_model_l2_a.catalog' )
 
-        catalogs_ch = msets_channel.collect { it + "/apparent_sky_model_l2_a.catalog" }
+        catalogs_ch = mset_ch.collect { it + "/apparent_sky_model_l2_a.catalog" }
 
         make_sourcedb_ch = MakeSourceDB ( model_attenuate_ch.apparent_model.collect(), catalogs_ch.flatten())
 
-        sourcedbs_ch = msets_channel.collect { it + "/apparent_sky_model_l2_a.catalog.sourcedb" }
+        sourcedb_ch = mset_ch.collect { it + "/apparent_sky_model_l2_a.catalog.sourcedb" }
 
-        msets_and_sourcedbs_ch = msets_channel.flatten().merge( sourcedbs_ch.flatten() )
+        mset_and_sourcedb_ch = mset_ch.flatten().merge( sourcedb_ch.flatten() )
 
-        di_calibration_ch = DP3Calibrate (make_sourcedb_ch.collect(), msets_and_sourcedbs_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
+        di_calibration_ch = DP3Calibrate (make_sourcedb_ch.collect(), mset_and_sourcedb_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
 
-        solutions_ch =  msets_channel.collect { it + "/${params.di_calibration_solutions_file_l2_a}" }
+        all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_a}" }
 
-        sources_to_subtract_ch = msets_channel.collect { it + "/apparent_sky_model_l2_a.catalog.txt" }
+        sources_to_subtract_ch = mset_ch.collect { it + "/apparent_sky_model_l2_a.catalog.txt" }
 
-        msets_sourcedbs_solutions_and_sources_to_subtract_ch = msets_and_sourcedbs_ch.merge( solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
+        mset_sourcedb_solutions_and_sources_to_subtract_ch = mset_and_sourcedb_ch.merge( all_solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
 
-        subtract_ateams_ch = SubtractSources ( di_calibration_ch.collect(), msets_sourcedbs_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_A" ) // apply solutions after subtracting Ateams
+        subtract_ateam_ch = SubtractSources ( di_calibration_ch.collect(), mset_sourcedb_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_A" ) // apply solutions after subtracting Ateams
         
-        msets_sourcedbs_and_solutions_ch = msets_and_sourcedbs_ch.merge( solutions_ch.flatten() )
+        mset_sourcedb_and_solutions_ch = mset_and_sourcedb_ch.merge( all_solutions_ch.flatten() )
 
-        apply_di_ch = ApplyDI ( subtract_ateams_ch.collect(), msets_sourcedbs_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_A", "CORRECTED_DATA_L2_A" )
+        apply_di_ch = ApplyDI ( subtract_ateam_ch.collect(), mset_sourcedb_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_A", "CORRECTED_DATA_L2_A" )
 
-        AOqualityCollect( apply_di_ch, msets_channel, "CORRECTED_DATA_L2_A" )
+        AOqualityCollect( apply_di_ch, mset_ch, "CORRECTED_DATA_L2_A" )
 
     emit:
 
         AOqualityCollect.out
-}   
+}
 
 
-workflow L2_B { //catalog model
+workflow L2_B {
 
     take:
+
         wsclean_ao_model
 
     main:
 
-        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' )
+        mset_ch = channel.fromPath( "${params.ms}_T*.MS", glob: true, checkIfExists: true, type: 'dir' )
 
-        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_ao_model, msets_channel, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_b.catalog' )
+        ateam_catalog_ch = ModelToolAttenuate ( wsclean_ao_model, mset_ch, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'l2b_apparent_ateam.catalog' )
 
-        all_ateam_model_attenuate_ch = msets_channel.collect { it + "/ateam_sky_model_l2_b.catalog" }
+        all_ateam_catalog_ch = mset_ch.collect { it + "/l2b_apparent_ateam.catalog" }
 
         // Convert apparent A-team model to AO format
-        ateam_bbs2model_ch = BBS2Model ( ateam_model_attenuate_ch.apparent_model.collect(), all_ateam_model_attenuate_ch.flatten(), "apparent_ateam_sky_model_l2_b.ao" )
+        ateam_bbs2model_ch = BBS2Model ( ateam_catalog_ch.apparent_model.collect(), all_ateam_catalog_ch.flatten(), "l2b_apparent_ateam.ao" )
 
-        all_ateam_bbs2model_ch = msets_channel.collect { it + "/apparent_ateam_sky_model_l2_b.ao" }
+        all_ateam_bbs2model_ch = mset_ch.collect { it + "/l2b_apparent_ateam.ao" }
 
         // Combine apparent A-team model with the apparent WSclean model
         wsclean_ao_model_ch = channel.of( wsclean_ao_model )
-        full_ao_format_model_ch = Combine2AOModels(ateam_bbs2model_ch.collect(), all_ateam_bbs2model_ch.flatten().combine( wsclean_ao_model_ch ), "full_sky_model_l2_b.ao")
+        merge_ncp_and_ateam_ch  = Combine2AOModels( ateam_bbs2model_ch.collect(), all_ateam_bbs2model_ch.flatten().combine( wsclean_ao_model_ch ), "l2b_apparent_ncp_ateam.ao" )
 
-        all_full_ao_format_model_ch = msets_channel.collect { it + "/full_sky_model_l2_b.ao" }
-
-        // Convert the combined model from dp3 format to sourceDB format
-        full_dp3_format_model_ch = AO2DP3Model(full_ao_format_model_ch.collect(), all_full_ao_format_model_ch.flatten(), "full_sky_model_l2_b.skymodel")
-
-        all_full_dp3_format_model_ch = msets_channel.collect { it + "/full_sky_model_l2_b.skymodel" }
+        all_merge_ncp_and_ateam_ch  = mset_ch.collect { it + "/l2b_apparent_ncp_ateam.ao" }
 
         // Convert the combined model from dp3 format to sourceDB format
-        full_sourcedb_format_model_ch = MakeSourceDB(full_dp3_format_model_ch.collect(), all_full_dp3_format_model_ch.flatten())
+        dp3_format_ch = AO2DP3Model( merge_ncp_and_ateam_ch .collect(), all_merge_ncp_and_ateam_ch .flatten(), "l2b_apparent_ncp_ateam.skymodel" )
 
-        all_full_sourcedb_format_model_ch = msets_channel.collect { it + "/full_sky_model_l2_b.skymodel.sourcedb" }
+        all_dp3_format_ch = mset_ch.collect { it + "/l2b_apparent_ncp_ateam.skymodel" }
 
-        msets_and_sourcedbs_l2b_ch = msets_channel.flatten().merge( all_full_sourcedb_format_model_ch.flatten() )
+        // Convert the combined model from dp3 format to sourceDB format
+        sourcedb_ch = MakeSourceDB( dp3_format_ch.collect(), all_dp3_format_ch.flatten() )
 
-        // Run DI calibration
-        di_calibration_l2b_ch = DP3Calibrate ( full_sourcedb_format_model_ch.collect(), msets_and_sourcedbs_l2b_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b )
+        all_sourcedb_ch = mset_ch.collect { it + "/l2b_apparent_ncp_ateam.skymodel.sourcedb" }
 
+        mset_and_sourcedb_l2b_ch = mset_ch.flatten().merge( all_sourcedb_ch.flatten() )
 
-        solutions_ch =  msets_channel.collect { it + "/${params.di_calibration_solutions_file_l2_b}" }
+        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_l2b_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b )
 
-        sources_to_subtract_ch = msets_channel.collect { it + "/ateam_sky_model_l2_b.catalog.txt" }
+        all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_b}" }
 
-        msets_sourcedbs_solutions_and_sources_to_subtract_ch = msets_and_sourcedbs_l2b_ch.merge( solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
+        sources_to_subtract_ch = mset_ch.collect { it + "/l2b_apparent_ateam.catalog.txt" }
 
-        subtract_ateams_ch = SubtractSources ( di_calibration_l2b_ch.collect(), msets_sourcedbs_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_B" )
+        mset_sourcedb_solutions_and_sources_to_subtract_ch = mset_and_sourcedb_l2b_ch.merge( all_solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
 
-        msets_sourcedbs_and_solutions_ch = msets_and_sourcedbs_l2b_ch.merge( solutions_ch.flatten() )
+        subtract_ateam_ch = SubtractSources ( calibrate_ch.collect(), mset_sourcedb_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_B" )
 
-        apply_di_ch = ApplyDI ( subtract_ateams_ch.collect(), msets_sourcedbs_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_B", "CORRECTED_DATA_L2_B" )
+        mset_sourcedb_and_solutions_ch = mset_and_sourcedb_l2b_ch.merge( all_solutions_ch.flatten() )
 
-        AOqualityCollect( apply_di_ch, msets_channel, "CORRECTED_DATA_L2_B" )
+        apply_di_ch = ApplyDI ( subtract_ateam_ch.collect(), mset_sourcedb_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_B", "CORRECTED_DATA_L2_B" )
+
+        AOqualityCollect( apply_di_ch, mset_ch, "CORRECTED_DATA_L2_B" )
 
     emit:
 
@@ -179,123 +172,56 @@ workflow L2_B { //catalog model
 
 }
 
-
-
-workflow L2_B_old { //catalog model
+workflow L2_C {
 
     take:
+
         wsclean_ao_model
 
     main:
-        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ).collect {it}
-        // Attenuate it
-        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_ao_model, msets_channel, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_b.catalog' )
 
-        // Convert it to AO format
-        ateam_bbs2model_ch = BBS2Model ( ateam_model_attenuate_ch.apparent_model, "apparent_ateam_sky_model_l2_b.ao" )
+        mset_ch = channel.fromPath( "${params.ms}_T*.MS", glob: true, checkIfExists: true, type: 'dir' )
 
-        // Combine them
-        full_ao_format_model_ch = Combine2AOModels(ateam_bbs2model_ch, wsclean_ao_model, "full_sky_model_l2_b.ao") //combined_l2b_model_ch
+        three_c_catalog_ch = ModelToolAttenuate ( wsclean_ao_model, mset_ch, params.minimum_elevation, params.minimum_3C_patch_flux, params.min_flux, params.intrinsic_3C_model, 'l2c_apparent_3c.catalog' )
 
-        // Convert the combined model from dp3 format to sourceDB format
-        full_dp3_format_model_ch = AO2DP3Model(full_ao_format_model_ch, "full_sky_model_l2_b.skymodel")
+        all_3c_catalog_ch = mset_ch.collect { it + "/l2c_apparent_3c.catalog" }
 
-        // Convert the combined model from dp3 format to sourceDB format
-        full_sourcedb_format_model_ch = MakeSourceDB(full_dp3_format_model_ch, "full_sky_model_l2_b.sourcedb")
+        bbs2model_3c_ch = BBS2Model ( three_c_catalog_ch.apparent_model.collect(), all_3c_catalog_ch.flatten(), "l2c_apparent_3c.ao" )
 
-        // Run DI calibration
-        di_calibration_l2b_ch = DP3Calibrate ( msets_channel, full_sourcedb_format_model_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b )
+        all_bbs2model_3c_ch = mset_ch.collect { it + "/l2c_apparent_3c.ao" }
 
-        // Subtract Ateam sources
-        subtract_ateams_l2b_ch = SubtractSources( msets_channel, params.ateams_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2b_ch, ateam_model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_B" )
+        wsclean_ao_model_ch = channel.of( wsclean_ao_model )
+        merge_ncp_and_3c_ch = Combine2AOModels ( bbs2model_3c_ch.collect(), all_bbs2model_3c_ch.flatten().combine( wsclean_ao_model_ch ), "l2c_apparent_ncp_3c.ao" )
 
-        // Apply the Main field solutions
-        ApplyDI ( subtract_ateams_l2b_ch, full_sourcedb_format_model_ch, params.di_apply_parset,  di_calibration_l2b_ch, "SUBTRACTED_DATA_L2_B", "CORRECTED_DATA_L2_B" )
+        all_merge_ncp_and_3c_ch = mset_ch.collect { it + "/l2c_apparent_ncp_3c.ao" }
 
-    emit:
+        dp3_format_ch = AO2DP3Model ( merge_ncp_and_3c_ch.collect(), all_merge_ncp_and_3c_ch.flatten(), "l2c_apparent_ncp_3c.skymodel" )
 
-        ApplyDI.out
-}
+        all_dp3_format_ch = mset_ch.collect { it + "/l2c_apparent_ncp_3c.skymodel" }
 
-workflow L2_C {
-    take:
-        wsclean_l2b_ao_model
+        sourcedb_ch = MakeSourceDB( dp3_format_ch.collect(), all_dp3_format_ch.flatten() )
 
-    main:
-        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ).collect {it}
+        all_sourcedb_ch = mset_ch.collect { it + "/l2c_apparent_ncp_3c.skymodel.sourcedb" }
 
-         // Attenuate it
-        ateam_model_attenuate_ch = ModelToolAttenuate ( wsclean_l2b_ao_model, msets_channel, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, params.intrinsic_Ateam_model, 'ateam_sky_model_l2_c.catalog' )
+        mset_and_sourcedb_ch = mset_ch.flatten().merge( all_sourcedb_ch.flatten() )
 
-        // Convert it to AO format
-        ateam_bbs2model_ch = BBS2Model ( ateam_model_attenuate_ch.apparent_model, "apparent_ateam_sky_model_l2_c.ao" )
+        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_c )
 
-        // Combine them
-        full_ao_format_model_ch = Combine2AOModels(ateam_bbs2model_ch, wsclean_l2b_ao_model, "full_sky_model_l2_c.ao") //combined_l2b_model_ch
+        all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_c}" }
 
-        // Convert the combined model from dp3 format to sourceDB format
-        full_dp3_format_model_ch = AO2DP3Model(full_ao_format_model_ch, "full_sky_model_l2_c.skymodel")
+        sources_to_subtract_ch = mset_ch.collect { it + "/l2c_apparent_3c.catalog.txt" }
 
-        // Convert the combined model from dp3 format to sourceDB format
-        full_sourcedb_format_model_ch = MakeSourceDB(full_dp3_format_model_ch, "full_sky_model_l2_c.sourcedb")
+        mset_sourcedb_solutions_and_sources_to_subtract_ch = mset_and_sourcedb_ch.merge( all_solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
 
-        // Run DI calibration
-        di_calibration_l2b_ch = DP3Calibrate ( msets_channel, full_sourcedb_format_model_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_c )
+        subtract_3c_ch = SubtractSources ( calibrate_ch.collect(), mset_sourcedb_solutions_and_sources_to_subtract_ch, params.three_c_subtraction_parset, "CORRECTED_DATA_L2_B", "SUBTRACTED_DATA_L2_C" )
 
-        // Subtract Ateam sources
-        subtract_ateams_l2b_ch = SubtractSources ( msets_channel, params.ateams_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2b_ch, ateam_model_attenuate_ch.sources_to_subtract_file, "DATA", "SUBTRACTED_DATA_L2_C" )
-
-        // Apply the Main field solutions
-        ApplyDI ( subtract_ateams_l2b_ch, full_sourcedb_format_model_ch, params.di_apply_parset,  di_calibration_l2b_ch, "SUBTRACTED_DATA_L2_C", "CORRECTED_DATA_L2_C" )
-
-        // Image and convert output model from BBS to AO format
-        // WScleanImage ( apply_di_l2c_ch, "CORRECTED_DATA_L2_C", "clean_ateam_sub_l2_c" )
+        AOqualityCollect( subtract_3c_ch, mset_ch, "SUBTRACTED_DATA_L2_C" )
 
     emit:
-        // WScleanImage.out.wsclean_ao_model
-        ApplyDI.out
+
+        AOqualityCollect.out
+
 }
-
-
-workflow L2_D {
-    take:
-        wsclean_l2c_ao_model
-    
-    main:
-        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ).collect {it}
-        // params.minimum_patch_flux = 1 here
-        // Attenuate the intrinsic 3C model. the wsclean model is just a workflow connector
-        attenuate_3c_model_ch = ModelToolAttenuate ( wsclean_l2c_ao_model, msets_channel, params.minimum_elevation, params.minimum_3C_patch_flux, params.min_flux, params.intrinsic_3C_model, 'apparent_3c_sky_model_l2_d.catalog' )
-
-        // Convert it to AO format
-        bbs2model_3c_ch = BBS2Model ( attenuate_3c_model_ch.apparent_model, "apparent_3c_sky_model_l2_d.ao" )
-
-        // Combine it with the wsclean model from L2C
-        merge_ncp_and_3c_sky_models_ch = Combine2AOModels ( bbs2model_3c_ch, wsclean_l2c_ao_model, "full_ncp_and_3c_sky_model_l2_d.ao" )
-
-        // Convert the combined model from dp3 format to sourceDB format
-        convert_model_to_dp3_format_ch = AO2DP3Model ( merge_ncp_and_3c_sky_models_ch, "full_ncp_and_3c_sky_model_l2_d.skymodel" )
-
-        // Convert the combined model from dp3 format to sourceDB format
-        full_sourcedb_format_model_ch = MakeSourceDB ( convert_model_to_dp3_format_ch, "full_ncp_and_3c_sky_model_l2_d.sourcedb" )
-
-        // Run DI calibration # this parset should change the solution interval and  minimum lambda cut
-        di_calibration_l2d_ch = DP3Calibrate ( msets_channel, full_sourcedb_format_model_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_d )
-
-        // Subtract 3C sources
-        SubtractSources ( msets_channel, params.three_c_subtraction_parset, full_sourcedb_format_model_ch, di_calibration_l2d_ch, attenuate_3c_model_ch.sources_to_subtract_file, "CORRECTED_DATA_L2_C", "SUBTRACTED_DATA_L2_D" )
-
-        // Image and convert output model from BBS to AO format #TODO: REMOVE THIS PART IF YOU WANT!
-        WScleanImage ( subtract_3c_l2d_ch, "SUBTRACTED_DATA_L2_D", "clean_3c_sub_l2_d" )
-
-    emit:
-    
-        // WScleanImage.out.wsclean_ao_model
-        SubtractSources.out
-}
-
-
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // Data: L3
@@ -315,39 +241,52 @@ workflow L2_D {
 // params.dd_calibration_solutions_file_l3 = "dd_diagonal_clustered_l3.h5"
 // params.ncp_subtraction_parset = "/home/users/chege/theleap/neap/parsets/dd_sub.parset"
 
+
 workflow L3 {
 
     take:
-        final_ncp_wsclean_ao_model
+
+        wsclean_ao_model
     
     main:
-        msets_channel = channel.fromPath( "${params.ms}*.MS", glob: true, checkIfExists: true, type: 'dir' ).collect {it}
+
+        mset_ch = channel.fromPath ( "${params.ms}_T*.MS", glob: true, checkIfExists: true, type: 'dir' )
 
         // Select sources within params.sky_model_radius degrees around params.fov_center
-        source_selection_ch = SelectNearbySources (final_ncp_wsclean_ao_model, params.fov_center, params.sky_model_radius, "dd_ncp_sky_model_l3.ao")
+        source_select_ch = SelectNearbySources ( wsclean_ao_model, params.fov_center, params.sky_model_radius, "l3_ncp.ao" )
 
-        // Make the needed number of clusters
-        clustering_ch = MakeClusters(source_selection_ch, params.number_of_clusters, "dd_ncp_sky_model_clustered_l3.ao")
+        // Make the needed number of clusters 
+        // TODO: make the params.ncp_clusters file automatically now it needs to be edited manually if nclusters!=7
+        cluster_ch = MakeClusters(source_select_ch, params.number_of_clusters, "l3_ncp_clusters.ao" )
 
-        // Convert the combined model from dp3 format to sourceDB format
-        convert_dd_model_to_dp3_format_ch = AO2DP3Model ( clustering_ch, "dd_ncp_sky_model_clustered_l3.skymodel" )
+        dp3_format_ch = AO2DP3Model ( true, cluster_ch, "l3_ncp_clusters.skymodel" )
 
-         // Convert the combined model from dp3 format to sourceDB format
-        dd_sourcedb_format_model_ch = MakeSourceDB ( convert_dd_model_to_dp3_format_ch, "dd_ncp_sky_model_clustered_l3.sourcedb" )
+        sourcedb_ch = MakeSourceDB ( true, dp3_format_ch )
 
-        // Average the data
-        time_averaging_ch = AverageDataInTime ( dd_sourcedb_format_model_ch, msets_channel, params.l3_averaged_ms_name, params.ntimesteps_to_average, "SUBTRACTED_DATA_L2_D", "DATA")
+        avgmsout_ch = mset_ch.collect { it.toString().replace(params.ms, "${params.ms}_L3") }
 
-        // Perform DD calibration on averaged data
-        dd_calibration_l3_ch = DP3Calibrate ( time_averaging_ch, dd_sourcedb_format_model_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3 )
+        mset_and_avgmsout_ch = mset_ch.flatten().merge( avgmsout_ch.flatten() )
 
-        // Subtract NCP using the dd solutions
-        SubtractSources ( msets_channel, params.ncp_subtraction_parset, dd_sourcedb_format_model_ch, dd_calibration_l3_ch, params.ncp_clusters, "SUBTRACTED_DATA_L2_D", "SUBTRACTED_DATA_L3" )
+        average_ch = AverageDataInTime ( sourcedb_ch, mset_and_avgmsout_ch, params.ntimesteps_to_average, "SUBTRACTED_DATA_L2_C", "DATA" )
 
-        // Image and convert output model from BBS to AO format #TODO: REMOVE THIS PART IF YOU WANT!
-        WScleanImage ( subtract_ncp_l3_ch, "SUBTRACTED_DATA_L3", "clean_ncp_sub_l3" )
+        avgmsout_and_sourcedb_ch = avgmsout_ch.flatten().combine( sourcedb_ch )
+
+        calibrate_ch = DP3Calibrate ( average_ch.collect(), avgmsout_and_sourcedb_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3 )
+
+        all_solutions_ch =  avgmsout_ch.flatten().collect { it + "/${params.dd_calibration_solutions_file_l3}" }
+
+        clusters_ch = channel.of ( params.ncp_clusters )
+
+        mset_and_sourcedb_ch = mset_ch.flatten().combine( sourcedb_ch )
+
+        mset_sourcedb_solutions_and_clusters_ch = mset_and_sourcedb_ch.merge( all_solutions_ch.flatten() ).combine( clusters_ch )
+
+        subtract_ncp_ch = SubtractSources ( calibrate_ch.collect(), mset_sourcedb_solutions_and_clusters_ch, params.ncp_subtraction_parset, "SUBTRACTED_DATA_L2_C", "SUBTRACTED_DATA_L3" )
+
+        AOqualityCollect( subtract_ncp_ch, mset_ch, "SUBTRACTED_DATA_L3" )
 
     emit:
-        // WScleanImage.out.wsclean_ao_model
-        SubtractSources.out
+
+        AOqualityCollect.out
+
 }

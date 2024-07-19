@@ -1,6 +1,6 @@
 numthreads=6
 
-msin.datacolumn=CORRECTED_DATA_L2_BP_C
+msin.datacolumn=CORRECTED_DATA_L2_B
 msout=.
 
 steps=[cal]

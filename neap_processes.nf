@@ -302,7 +302,7 @@ process AO2DP3Model {
 
 // Given a DP3 DI parset run DDECAL DI calibration
 process DP3Calibrate {
-    label 'default'
+    label 'sing'
     publishDir "${full_ms_path}" , mode: 'copy'
     maxForks 5
 
@@ -322,6 +322,29 @@ process DP3Calibrate {
 
         '''
         DP3 !{dp3_cal_parset_file} msin=!{full_ms_path} cal.sourcedb=!{sourcedb_name} cal.h5parm=!{output_calibration_solutions_file} > !{full_ms_path}/!{output_calibration_solutions_file}_dp3_cal.log
+        '''
+}
+
+// di_calibration_ch = CalpipeCalibrate ( make_sourcedb_ch.collect(), mset_and_sourcedb_ch, params.di_cal_ateam_toml, params.di_calibration_solutions_file_l2_a )
+process CalpipeCalibrate {
+
+    label 'default'
+    publishDir "${full_ms_path}" , mode: 'copy'
+    maxForks 5
+
+    input:
+        val ready
+        tuple path(full_ms_path), path(sourcedb_name)
+        path config_file
+        val output_calibration_solutions_file //.5 extension
+
+    output:
+        path "${output_calibration_solutions_file}"
+
+    shell:
+
+        '''
+        calpipe !{config_file} !{sourcedb_name} !{output_calibration_solutions_file} !{full_ms_path}> !{full_ms_path}/!{output_calibration_solutions_file}_calpipe_ddecal.log
         '''
 }
 

@@ -81,21 +81,21 @@ workflow L2_A {
 
         ateams_ch = Channel.of( params.intrinsic_Ateam_model )
 
-        model_attenuate_ch = ModelToolAttenuate ( true, mset_ch, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, main_field_model_ch.concat( ateams_ch ).collect(), 'apparent_sky_model_l2_a.catalog' )
+        model_attenuate_ch = ModelToolAttenuate ( true, mset_ch, params.minimum_elevation, params.minimum_patch_flux, params.min_flux, main_field_model_ch.concat( ateams_ch ).collect(), 'l2a_apparent.catalog' )
 
-        catalogs_ch = mset_ch.collect { it + "/apparent_sky_model_l2_a.catalog" }
+        catalogs_ch = mset_ch.collect { it + "/l2a_apparent.catalog" }
 
         make_sourcedb_ch = MakeSourceDB ( model_attenuate_ch.apparent_model.collect(), catalogs_ch.flatten())
 
-        sourcedb_ch = mset_ch.collect { it + "/apparent_sky_model_l2_a.catalog.sourcedb" }
+        sourcedb_ch = mset_ch.collect { it + "/l2a_apparent.catalog.sourcedb" }
 
         mset_and_sourcedb_ch = mset_ch.flatten().merge( sourcedb_ch.flatten() )
 
-        di_calibration_ch = DP3Calibrate (make_sourcedb_ch.collect(), mset_and_sourcedb_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
+        di_calibration_ch = DP3Calibrate ( make_sourcedb_ch.collect(), mset_and_sourcedb_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
 
         all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_a}" }
 
-        sources_to_subtract_ch = mset_ch.collect { it + "/apparent_sky_model_l2_a.catalog.txt" }
+        sources_to_subtract_ch = mset_ch.collect { it + "/l2a_apparent.catalog.txt" }
 
         mset_sourcedb_solutions_and_sources_to_subtract_ch = mset_and_sourcedb_ch.merge( all_solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
 

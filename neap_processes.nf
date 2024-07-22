@@ -302,7 +302,7 @@ process AO2DP3Model {
 
 // Given a DP3 DI parset run DDECAL DI calibration
 process DP3Calibrate {
-    label 'default'
+    label 'sing'
     publishDir "${full_ms_path}" , mode: 'copy'
     maxForks 5
 

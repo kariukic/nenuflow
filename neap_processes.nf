@@ -58,7 +58,8 @@ process MakeClusters {
 
 
 process AverageDataInTime {
-
+    label 'sing'
+    
     input:
         val ready
         tuple path(msin), val(msout)
@@ -351,7 +352,7 @@ process CalpipeCalibrate {
 
 // apply DI solutions given the solutions file and a DP3 DI slutions apply parset
 process ApplyDI {
-
+    label 'sing'
     input:
         val ready
         tuple path(full_ms_path), path(sourcedb_name), path(calibration_solutions_file)
@@ -372,7 +373,7 @@ process ApplyDI {
 //Subtract a sky direction(s)
 //In total we subtract A-teams, 3C sources, and NCP(in 7 clusters)
 process SubtractSources {
-
+    label 'sing'
     input:
         val ready
         tuple path(full_ms_path), path(sourcedb_name), path(calibration_solutions_file), path(sources_to_subtract_file)

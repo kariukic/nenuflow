@@ -4,6 +4,7 @@
 include {
     RetrieveData;
     ConvertL1toL2;
+    BBS2Model;
     readTxtIntoString;
     readTxtAndAppendString;
 } from "./neap_processes.nf"
@@ -126,10 +127,14 @@ workflow Run_L2A {
 
         aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2a" )
 
-        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "l2_a_ateam_subtracted" )
+        wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "l2a_ateam_sub" )
+
+        BBS2Model ( true, wsclean_ch.model, "l2a_model.ao" )
+
 
     emit:
-        model = WScleanImage.out.wsclean_ao_model
+        model = BBS2Model.out
+
 }
 
 
@@ -151,10 +156,12 @@ workflow Run_L2B {
 
         aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2b" )
 
-        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "l2_b_ateam_subtracted" )
+        wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "l2b_ateam_sub" )
+
+        BBS2Model ( true, wsclean_ch.model, "l2b_model.ao" )
 
     emit:
-        model = WScleanImage.out.wsclean_ao_model
+        model = BBS2Model.out
 
 }
 
@@ -163,6 +170,7 @@ workflow Run_L2C {
         wsclean_ao_model
 
     main:
+
         l2c_params_ch = GetParams( 'l2c' )
 
         cal_l2c_ch = DistributedCalibration ( l2c_params_ch.params_standby, wsclean_ao_model, "L2_C", l2c_params_ch.params_file )
@@ -175,11 +183,13 @@ workflow Run_L2C {
 
         aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2c" )
 
-        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L2_C", "l2_c_3c_subtracted" )
+        wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L2_C", "l2c_3c_sub" )
+
+        BBS2Model ( true, wsclean_ch.model, "l2c_model.ao" )
 
     emit:
+        model = BBS2Model.out
 
-        model = WScleanImage.out.wsclean_ao_model
     
 }
 
@@ -202,18 +212,21 @@ workflow Run_L3 {
 
         aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l3" )
 
-        WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L3", "l3_ncp_subtracted" )
+        wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L3", "l3_main_sub" )
+
+        BBS2Model ( true, wsclean_ch.model, "l3_model.ao" )
 
     emit:
-
-        model = WScleanImage.out.wsclean_ao_model
+        model = BBS2Model.out
 
 }
+
 
 // WSclean image
 process WScleanImage {
     label 'sing'
     publishDir "${params.datapath}/results/images", pattern: "*.fits", mode: "move", overwrite: true
+    publishDir "${params.datapath}/results/images", pattern: "*.txt", mode: "copy", overwrite: true
 
     input:
         val ready
@@ -226,18 +239,15 @@ process WScleanImage {
 
     output:
         path "*.fits"
-        path "${image_name}-sources.ao", emit: wsclean_ao_model
+        path "${image_name}-sources.txt", emit: model
 
     shell:
         '''
-        wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 5000 -scale !{scale} -size !{size} !{size} -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol !{spectral_pol_fit} !{mses} > wsclean_image.log
-
-        bbs2model !{image_name}-sources.txt !{image_name}-sources.ao
+        wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 5000 -scale !{scale} -size !{size} !{size} -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol !{spectral_pol_fit} !{mses} > !{image_name}_wsclean_image.log
         '''
 }
 
 process AOqualityCombine {
-    publishDir "${params.datapath}/results/aoquality", mode: "copy"
 
     input:
         val ready
@@ -245,19 +255,20 @@ process AOqualityCombine {
         val output_name
 
     output:
-        path "${output_name}.qs", type: 'dir', emit: qstats
-        path "${output_name}.png"
+        val true, emit: qstats
 
     shell:
         '''
-        aoquality combine !{output_name}.qs !{mses} > aoquality_combine.log
-        python3 !{projectDir}/templates/plot_aoqstats.py -q !{output_name}.qs -o !{output_name}.png >> aoquality_combine.log
+        mkdir -p !{params.datapath}/results/aoquality
+        aoquality combine !{params.datapath}/results/aoquality/!{output_name}.qs !{mses} > aoquality_combine.log
+        python !{projectDir}/templates/plot_aoqstats.py -q !{params.datapath}/results/aoquality/!{output_name}.qs -o !{output_name}.png >> aoquality_combine.log
         '''
 }
 
 process H5ParmCollect {
-    publishDir "${params.datapath}/results/solutions/${output_name}"
-    publishDir "${params.datapath}/results/solutions/${output_name}", pattern: "*.png"
+
+    // publishDir "${params.datapath}/results/solutions/${output_name}", pattern: "*.h5", mode: "move", overwrite: true
+    // publishDir "${params.datapath}/results/solutions/${output_name}", pattern: "*.png"
 
     input:
         val ready
@@ -265,12 +276,15 @@ process H5ParmCollect {
         val output_name
 
     output:
-        path "${output_name}.h5", emit: combined_sols
-        path "*.png"
+        // path "${output_name}.h5", emit: combined_sols
+        // path "*.png", emit: combined_sols
+        val true, emit: combined_sols
 
     shell:
         '''
-        H5parm_collector.py !{solution_files} -o !{output_name}.h5 > h5parm_collect.log
-        soltool plot --plot_dir $(pwd) !{output_name}.h5 >> h5parm_collect.log
+        H5parm_collector.py !{solution_files} -o !{params.datapath}/results/solutions/!{output_name}.h5 > h5parm_collect.log
+        # soltool plot --plot_dir $(pwd) !{params.datapath}/results/solutions/!{output_name}.h5 >> h5parm_collect.log
         '''
+        
+
 }

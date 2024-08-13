@@ -91,7 +91,21 @@ workflow L2_A {
 
         mset_and_sourcedb_ch = mset_ch.flatten().merge( sourcedb_ch.flatten() )
 
-        di_calibration_ch = DP3Calibrate ( make_sourcedb_ch.collect(), mset_and_sourcedb_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
+        if (params.sols_per_dir) {
+
+            nsols_per_dir_ch = mset_ch.collect { it + "/l2a_apparent.catalog.solperdir.txt" }
+
+            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( nsols_per_dir_ch.flatten() )
+
+        }
+
+        else {
+
+            mset_and_sourcedb_and_nsols_ch.combine( false )
+
+        }
+
+        di_calibration_ch = DP3Calibrate ( make_sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
 
         all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_a}" }
 
@@ -148,19 +162,33 @@ workflow L2_B {
 
         all_sourcedb_ch = mset_ch.collect { it + "/l2b_apparent_ncp_ateam.skymodel.sourcedb" }
 
-        mset_and_sourcedb_l2b_ch = mset_ch.flatten().merge( all_sourcedb_ch.flatten() )
+        mset_and_sourcedb_ch = mset_ch.flatten().merge( all_sourcedb_ch.flatten() )
 
-        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_l2b_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b )
+        if (params.sols_per_dir) {
+
+            nsols_per_dir_ch = mset_ch.collect { it + "/l2b_apparent_ateam.catalog.solperdir.txt" }
+
+            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( nsols_per_dir_ch.flatten() )
+
+        }
+
+        else {
+
+            mset_and_sourcedb_and_nsols_ch.combine( false )
+
+        }
+
+        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b )
 
         all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_b}" }
 
         sources_to_subtract_ch = mset_ch.collect { it + "/l2b_apparent_ateam.catalog.txt" }
 
-        mset_sourcedb_solutions_and_sources_to_subtract_ch = mset_and_sourcedb_l2b_ch.merge( all_solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
+        mset_sourcedb_solutions_and_sources_to_subtract_ch = mset_and_sourcedb_ch.merge( all_solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
 
         subtract_ateam_ch = SubtractSources ( calibrate_ch.collect(), mset_sourcedb_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_B" )
 
-        mset_sourcedb_and_solutions_ch = mset_and_sourcedb_l2b_ch.merge( all_solutions_ch.flatten() )
+        mset_sourcedb_and_solutions_ch = mset_and_sourcedb_ch.merge( all_solutions_ch.flatten() )
 
         apply_di_ch = ApplyDI ( subtract_ateam_ch.collect(), mset_sourcedb_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_B", "CORRECTED_DATA_L2_B" )
 

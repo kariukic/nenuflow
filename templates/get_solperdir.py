@@ -129,10 +129,11 @@ def get_solints(skymodel, solint=48, max_flux=40, min_flux=15, dist=False):
     solints = get_divisors(solint)
     weights_solint = [find_closest_element(solints, i) for i in weights_norm]
     weights_solint.insert(main_idx, 1)
-    # print(patches)
-    # print(patch_fluxes)
+    # The required DP3 input format
+    weights_solint = f'[{",".join(str(w) for w in weights_solint)}]'
+
     print(weights_solint)
-    return weights_solint
+    # return weights_solint
 
 
 def main():

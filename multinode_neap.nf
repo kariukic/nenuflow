@@ -243,7 +243,7 @@ process WScleanImage {
 
     shell:
         '''
-        wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 5000 -scale !{scale} -size !{size} !{size} -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol !{spectral_pol_fit} !{mses} > !{image_name}_wsclean_image.log
+        wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 5000 -scale !{scale} -size !{size} !{size} -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol !{spectral_pol_fit} !{mses} > !{params.logs_dir}/!{image_name}_wsclean_image.log
         '''
 }
 
@@ -261,13 +261,13 @@ process AOqualityCombine {
         '''
         mkdir -p !{params.datapath}/results/aoquality
         aoquality combine !{params.datapath}/results/aoquality/!{output_name}.qs !{mses} > aoquality_combine.log
-        python !{projectDir}/templates/plot_aoqstats.py -q !{params.datapath}/results/aoquality/!{output_name}.qs -o !{output_name}.png >> aoquality_combine.log
+        python !{projectDir}/templates/plot_aoqstats.py -q !{params.datapath}/results/aoquality/!{output_name}.qs -o !{params.datapath}/results/aoquality/!{output_name}.png >> !{params.logs_dir}/aoquality_combine.log
         '''
 }
 
 process H5ParmCollect {
 
-    // publishDir "${params.datapath}/results/solutions/${output_name}", pattern: "*.h5", mode: "move", overwrite: true
+    publishDir "${params.datapath}/results/solutions/${output_name}", pattern: "*.h5", mode: "move", overwrite: true
     // publishDir "${params.datapath}/results/solutions/${output_name}", pattern: "*.png"
 
     input:
@@ -276,14 +276,14 @@ process H5ParmCollect {
         val output_name
 
     output:
-        // path "${output_name}.h5", emit: combined_sols
+        path "${output_name}.h5", emit: combined_sols
         // path "*.png", emit: combined_sols
-        val true, emit: combined_sols
+        // val true, emit: combined_sols
 
     shell:
         '''
-        H5parm_collector.py !{solution_files} -o !{params.datapath}/results/solutions/!{output_name}.h5 > h5parm_collect.log
-        # soltool plot --plot_dir $(pwd) !{params.datapath}/results/solutions/!{output_name}.h5 >> h5parm_collect.log
+        H5parm_collector.py !{solution_files} -o !{output_name}.h5 > h5parm_collect.log
+        # soltool plot --plot_dir $(pwd) !{output_name}.h5 >> h5parm_collect.log
         '''
         
 

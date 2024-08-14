@@ -321,7 +321,7 @@ process DP3Calibrate {
     shell:
         '''
 
-        if !{sols_per_dir_file}; then
+        if [ -f !{sols_per_dir_file} ]; then
             
             nsols_per_dir=$(<!{sols_per_dir_file})
             

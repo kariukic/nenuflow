@@ -5,8 +5,7 @@ msout=.
 
 steps=[cal]
 cal.type=ddecal
-cal.mode=fulljones
-cal.solint=30
+cal.mode=diagonal
 cal.nchan=3
 cal.maxiter=50
 cal.uvlambdamin=40

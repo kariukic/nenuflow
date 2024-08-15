@@ -196,13 +196,30 @@ process ModelToolAttenuate {
     output:
         path "${output_model_name}", emit: apparent_model
         path "${output_model_name}.txt", emit: sources_to_subtract_file
-        path "${output_model_name}.solperdir.txt", emit: nsols_per_direrction
 
     shell:
         """
         modeltool attenuate !{full_ms_path} !{intrinsic_model} -e !{min_elevation} -p !{min_patch_flux} -o !{output_model_name} -m !{min_flux}  > model_attenuate.log
         python3 !{projectDir}/templates/apparent_sources_left.py -i model_attenuate.log -o !{output_model_name}.txt -e 'Main'
-        python3 !{projectDir}/templates/get_solperdir.py !{output_model_name} > !{output_model_name}.solperdir.txt
+        """
+}
+
+
+//Use editmodel tool to combine multiple AO format models
+process GetSolPerDir {
+    label 'sing'
+
+    input:
+        val ready
+        val input_model
+        val solint
+
+    output:
+        val true
+
+    shell:
+        """
+        python3 !{projectDir}/templates/get_solperdir.py !{input_model} --solint !{solint} > !{input_model}.solperdir.txt
         """
 }
 
@@ -311,9 +328,10 @@ process DP3Calibrate {
 
     input:
         val ready
-        tuple path(full_ms_path), path(sourcedb_name), val(sols_per_dir_file) // the sols_per_dir_file can be either a value (false) or a real path so val works fine
+        tuple path(full_ms_path), path(sourcedb_name), val(lsm_style_model) // the lsm_style_model can be either a value (false) or a real path so val works fine
         path dp3_cal_parset_file
         val output_calibration_solutions_file //.5 extension
+        val solint
 
     output:
         path "${output_calibration_solutions_file}"
@@ -321,15 +339,19 @@ process DP3Calibrate {
     shell:
         '''
 
-        if [ -f !{sols_per_dir_file} ]; then
+        if [ -f !{lsm_style_model} ]; then
+
+            sols_per_dir_file="!{lsm_style_model}.solperdir.txt"
+
+            python3 !{projectDir}/templates/get_solperdir.py !{lsm_style_model} --solint !{solint} > ${sols_per_dir_file}
             
-            nsols_per_dir=$(<!{sols_per_dir_file})
+            nsols_per_dir=$(<${sols_per_dir_file})
             
-            DP3 !{dp3_cal_parset_file} msin=!{full_ms_path} cal.sourcedb=!{sourcedb_name} cal.h5parm=!{output_calibration_solutions_file} cal.solint=48 cal.solveralgorithm=directioniterative cal.solutions_per_direction=${nsols_per_dir} > !{full_ms_path}/!{output_calibration_solutions_file}_dp3_cal.log
+            DP3 !{dp3_cal_parset_file} msin=!{full_ms_path} cal.sourcedb=!{sourcedb_name} cal.h5parm=!{output_calibration_solutions_file} cal.solint=!{solint} cal.solveralgorithm=directioniterative cal.solutions_per_direction=${nsols_per_dir} > !{full_ms_path}/!{output_calibration_solutions_file}_dp3_cal.log
         
         else
 
-            DP3 !{dp3_cal_parset_file} msin=!{full_ms_path} cal.sourcedb=!{sourcedb_name} cal.h5parm=!{output_calibration_solutions_file} > !{full_ms_path}/!{output_calibration_solutions_file}_dp3_cal.log
+            DP3 !{dp3_cal_parset_file} msin=!{full_ms_path} cal.sourcedb=!{sourcedb_name} cal.!{solint}=solint cal.h5parm=!{output_calibration_solutions_file} > !{full_ms_path}/!{output_calibration_solutions_file}_dp3_cal.log
 
         fi
 

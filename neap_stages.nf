@@ -94,7 +94,11 @@ workflow L2_A {
 
         if ( params.sols_per_dir ) {
 
-            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( catalogs_ch.flatten() )
+            get_sols_per_dir_ch = GetSolPerDir( make_sourcedb_ch.collect(), catalogs_ch.flatten(), params.solint )
+
+            sols_per_dir_ch = mset_ch.collect { it + "/l2a_apparent.catalog.solperdir.txt" }
+
+            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( sols_per_dir_ch.flatten() )
 
         }
 
@@ -165,7 +169,11 @@ workflow L2_B {
 
         if ( params.sols_per_dir ) {
 
-            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( all_ateam_catalog_ch.flatten() )
+            get_sols_per_dir_ch = GetSolPerDir( sourcedb_ch.collect(), all_ateam_catalog_ch.flatten(), params.solint )
+
+            sols_per_dir_ch = mset_ch.collect { it + "/l2b_apparent_ateam.catalog.solperdir.txt" }
+
+            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( sols_per_dir_ch.flatten() )
 
         }
 

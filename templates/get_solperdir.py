@@ -68,6 +68,7 @@ def get_patch_fluxes(skymodel, targetFreq=66.5e6):
         for i in range(len(sm)):
             fluxes[i] = get_flux(fluxes[i], alphas[i], logSI[i], nterms, refFreq[i], targetFreq)
         patch_fluxes.append(sum(fluxes))
+    sm_full.setPatchPositions(method='wmean')
     main = sm_full.getPatchPositions('Main')
     separations = sm_full.getDistance(main['Main'][0].value,main['Main'][1].value,byPatch=True)
     return list(patches), list(patch_fluxes), list(separations)

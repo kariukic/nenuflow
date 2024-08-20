@@ -94,11 +94,7 @@ workflow L2_A {
 
         if ( params.sols_per_dir ) {
 
-            get_sols_per_dir_ch = GetSolPerDir( make_sourcedb_ch.collect(), catalogs_ch.flatten(), params.solint )
-
-            sols_per_dir_ch = mset_ch.collect { it + "/l2a_apparent.catalog.solperdir.txt" }
-
-            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( sols_per_dir_ch.flatten() )
+            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( catalogs_ch.flatten() )
 
         }
 
@@ -169,11 +165,7 @@ workflow L2_B {
 
         if ( params.sols_per_dir ) {
 
-            get_sols_per_dir_ch = GetSolPerDir( sourcedb_ch.collect(), all_ateam_catalog_ch.flatten(), params.solint )
-
-            sols_per_dir_ch = mset_ch.collect { it + "/l2b_apparent_ateam.catalog.solperdir.txt" }
-
-            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( sols_per_dir_ch.flatten() )
+            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( all_dp3_format_ch.flatten() )
 
         }
 
@@ -239,7 +231,9 @@ workflow L2_C {
 
         mset_and_sourcedb_ch = mset_ch.flatten().merge( all_sourcedb_ch.flatten() )
 
-        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_c, params.solint )
+        mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.combine( channel.of( false ) )
+
+        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_c, params.solint_3c )
 
         all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_c}" }
 
@@ -305,7 +299,7 @@ workflow L3 {
 
         avgmsout_and_sourcedb_ch = avgmsout_ch.flatten().combine( sourcedb_ch )
 
-        calibrate_ch = DP3Calibrate ( average_ch.collect(), avgmsout_and_sourcedb_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3, params.solint )
+        calibrate_ch = DP3Calibrate ( average_ch.collect(), avgmsout_and_sourcedb_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3, params.solint_target )
 
         all_solutions_ch =  avgmsout_ch.flatten().collect { it + "/${params.dd_calibration_solutions_file_l3}" }
 

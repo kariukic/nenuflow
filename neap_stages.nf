@@ -104,7 +104,7 @@ workflow L2_A {
 
         }
 
-        di_calibration_ch = DP3Calibrate ( make_sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a, params.solint )
+        di_calibration_ch = DP3Calibrate ( make_sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a, params.solint, params.maxforks.ateam )
 
         all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_a}" }
 
@@ -175,7 +175,7 @@ workflow L2_B {
 
         }
 
-        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b, params.solint )
+        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b, params.solint, params.maxforks.ateam )
 
         all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_b}" }
 
@@ -233,7 +233,7 @@ workflow L2_C {
 
         mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.combine( channel.of( false ) )
 
-        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_c, params.solint_3c )
+        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_c, params.solint_3c, params.maxforks.three_c )
 
         all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_c}" }
 
@@ -299,7 +299,7 @@ workflow L3 {
 
         avgmsout_and_sourcedb_ch = avgmsout_ch.flatten().combine( sourcedb_ch )
 
-        calibrate_ch = DP3Calibrate ( average_ch.collect(), avgmsout_and_sourcedb_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3, params.solint_target )
+        calibrate_ch = DP3Calibrate ( average_ch.collect(), avgmsout_and_sourcedb_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3, params.solint_target, params.maxforks.target )
 
         all_solutions_ch =  avgmsout_ch.flatten().collect { it + "/${params.dd_calibration_solutions_file_l3}" }
 

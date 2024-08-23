@@ -71,11 +71,12 @@ workflow {
     // l1_ch = Retrieve()
     // l2_ch = L1toL2( l1_ch  ) //
     // l2a_ch = Run_L2A( true )
-    // l2a_ao_model = "/home/users/satyapan/NT04231208_analysis/trial_l2b_2/l2a_ateam_sub-sources_11deg.ao"
+    // l2a_ao_model = "/home/users/satyapan/NT04231208_analysis/trial_l2a_9/l2a_ateam_sub-sources_11deg.ao"
     // l2b_ch = Run_L2B( l2a_ao_model )
-    l2b_ao_model = "/home/users/satyapan/NT04231208_analysis/trial_l2c_1/l2b_ateam_sub-sources_11deg.ao"
+    l2b_ao_model = "/home/users/satyapan/NT04231208_analysis/trial_l2b_2/l2b_ateam_sub-sources_11deg.ao"
     l2c_ch = Run_L2C( l2b_ao_model )
-    // l3_ch = Run_L3( l2c_ch )
+    // l2b_ao_model = "/home/users/satyapan/NT04231208_analysis/trial_l2b_2/l2b_ateam_sub-sources.ao"
+    // l3_ch = Run_L3( l2b_ao_model )
 
 }
 
@@ -216,10 +217,10 @@ workflow Run_L3 {
 
         wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L3", "l3_main_sub" )
 
-        BBS2Model ( true, wsclean_ch.model, "l3_model.ao" )
+    //     BBS2Model ( true, wsclean_ch.model, "l3_model.ao" )
 
-    emit:
-        model = BBS2Model.out
+    // emit:
+    //     model = BBS2Model.out
 
 }
 

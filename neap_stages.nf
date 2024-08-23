@@ -283,8 +283,6 @@ workflow L3 {
         // Select sources within params.sky_model_radius degrees around params.fov_center
         source_select_ch = SelectNearbySources ( wsclean_ao_model, params.fov_center, params.sky_model_radius, "l3_ncp.ao" )
 
-        // Make the needed number of clusters 
-        // TODO: make the params.ncp_clusters file automatically now it needs to be edited manually if nclusters!=7
         cluster_ch = MakeClusters(source_select_ch, params.number_of_clusters, "l3_ncp_clusters.ao" )
 
         dp3_format_ch = AO2DP3Model ( true, cluster_ch, "l3_ncp_clusters.skymodel" )
@@ -303,7 +301,7 @@ workflow L3 {
 
         all_solutions_ch =  avgmsout_ch.flatten().collect { it + "/${params.dd_calibration_solutions_file_l3}" }
 
-        clusters_ch = channel.of ( params.ncp_clusters )
+        clusters_ch  = MakeDP3ClustersListFile(calibrate_ch.collect(), params.number_of_clusters, "clusters_list.txt")
 
         mset_and_sourcedb_ch = mset_ch.flatten().combine( sourcedb_ch )
 

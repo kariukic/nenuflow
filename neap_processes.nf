@@ -38,6 +38,26 @@ process SelectNearbySources {
         """
 }
 
+process MakeDP3ClustersListFile {
+    input:
+        val ready
+        val num
+        val fname
+
+    output:
+        path "${fname}"
+
+    script:
+        """
+        #!/usr/bin/env python3
+        clusters_str = ",".join([f"[cluster{c}]" for c in list(range(1, ${num}))])
+        with open("${fname}", "w") as txt:
+            txt.write( f"[{clusters_str}]" )
+        """
+
+}
+
+
 
 process MakeClusters {
     label 'sing'

@@ -132,11 +132,11 @@ workflow Run_L2A {
 
         wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "l2a_ateam_sub" )
 
-        BBS2Model ( true, wsclean_ch.model, "l2a_model.ao" )
-
+        AddPatchFilter(true, wsclean_ch.model, params.fov_center.ra, params.fov_center.dec, params.sky_model_radius )
 
     emit:
-        model = BBS2Model.out
+
+        model = AddPatchFilter.out.patch_filtered_model
 
 }
 
@@ -161,10 +161,11 @@ workflow Run_L2B {
 
         wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "l2b_ateam_sub" )
 
-        BBS2Model ( true, wsclean_ch.model, "l2b_model.ao" )
+        AddPatchFilter(true, wsclean_ch.model, params.fov_center.ra, params.fov_center.dec, params.sky_model_radius )
 
     emit:
-        model = BBS2Model.out
+
+        model = AddPatchFilter.out.patch_filtered_model
 
 }
 

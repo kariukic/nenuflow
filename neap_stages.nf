@@ -78,7 +78,7 @@ workflow L2_A {
     main:
 
         mset_ch = channel.fromPath( "${params.ms}_T*.MS", glob: true, checkIfExists: true, type: 'dir' )
-        main_field_model_ch = ModelToolBuild (mset_ch.take(1), params.catalog, params.min_flux, params.sky_model_radius, "main_field_intrinsic_model.txt")
+        main_field_model_ch = ModelToolBuild (mset_ch.take(1), params.catalog, params.min_flux, params.model_build_radius, "main_field_intrinsic_model.txt")
 
         ateams_ch = Channel.of( params.intrinsic_Ateam_model )
 
@@ -280,8 +280,7 @@ workflow L3 {
 
         mset_ch = channel.fromPath ( "${params.ms}_T*.MS", glob: true, checkIfExists: true, type: 'dir' )
 
-        // Select sources within params.sky_model_radius degrees around params.fov_center
-        source_select_ch = SelectNearbySources ( wsclean_ao_model, params.fov_center, params.sky_model_radius, "l3_ncp.ao" )
+        source_select_ch = SelectNearbySources ( wsclean_ao_model, params.fov_center.radec, params.sky_model_radius, "l3_ncp.ao" )
 
         cluster_ch = MakeClusters(source_select_ch, params.number_of_clusters, "l3_ncp_clusters.ao" )
 

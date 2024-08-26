@@ -76,6 +76,40 @@ process MakeClusters {
         """
 }
 
+// AddPatchFilter(true, model, ra, dec, filter)
+process AddPatchFilter {
+    label 'sing'
+    publishDir params.logs_dir, mode: 'copy'
+
+    input:
+        val ready
+        path model
+        val ra_default
+        val dec_default
+        val filter_default
+
+    output:
+        path "*deg.ao"
+        path "*deg.txt", emit: patch_filtered_model
+
+    shell:
+        '''
+        fullname=!{model}
+        name=${fullname%.*}
+        ra=${2:-!{ra_default}}
+        dec=${3:-!{dec_default}}
+        filter=${4:-!{filter_default}}
+
+        sed -i 's/POINT/POINT,Main/g' ${name}.txt
+        sed -i 's/GAUSSIAN/GAUSSIAN,Main/g' ${name}.txt
+        sed -i 's/Type/Type, Patch/g' ${name}.txt
+
+        bbs2model ${name}.txt ${name}.ao
+        editmodel -m ${name}_${filter}deg.ao -near ${ra} ${dec} ${filter} ${name}.ao
+        editmodel -dppp-model ${name}_${filter}deg.txt ${name}_${filter}deg.ao
+        '''
+}
+
 
 process AverageDataInTime {
     label 'sing'

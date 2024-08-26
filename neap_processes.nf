@@ -13,9 +13,9 @@ process GetMSList {
         val true
 
     script:
-        '''
+        """
         nenudata get_ms -c ${config_file} -s ${spectral_window} ${level} ${obsid}
-        '''
+        """
 }
 
 process SelectNearbySources {
@@ -33,9 +33,9 @@ process SelectNearbySources {
 
 
     shell:
-        '''
+        """
         editmodel -m !{output_model} -near !{fov_center_coords} !{radius} !{input_model}
-        '''
+        """
 }
 
 
@@ -51,9 +51,9 @@ process MakeClusters {
         path "${output_model}"
     
     shell:
-        '''
+        """
         cluster !{input_model} !{output_model} !{number_of_clusters}
-        '''
+        """
 }
 
 
@@ -72,7 +72,7 @@ process AverageDataInTime {
         val true
 
     shell:
-        '''
+        """
         #!/bin/bash
         cat >"avg.parset" <<EOL
         msin = !{msin}
@@ -85,7 +85,7 @@ process AverageDataInTime {
         avg.timestep = !{timesteps_to_average}
         EOL
         DP3 "avg.parset"
-        '''
+        """
 }
 
 
@@ -175,9 +175,9 @@ process ModelToolBuild {
         path "${output_catalog}", emit: intrinsic_model
 
     shell:
-        '''
+        """
         modeltool build  -c !{catalog} -m !{min_flux} -r !{radius} -o !{output_catalog} !{msin} > model_build.log
-        '''
+        """
 }
 
 
@@ -198,10 +198,29 @@ process ModelToolAttenuate {
         path "${output_model_name}.txt", emit: sources_to_subtract_file
 
     shell:
-        '''
+        """
         modeltool attenuate !{full_ms_path} !{intrinsic_model} -e !{min_elevation} -p !{min_patch_flux} -o !{output_model_name} -m !{min_flux}  > model_attenuate.log
         python3 !{projectDir}/templates/apparent_sources_left.py -i model_attenuate.log -o !{output_model_name}.txt -e 'Main'
-        '''
+        """
+}
+
+
+//Use editmodel tool to combine multiple AO format models
+process GetSolPerDir {
+    label 'sing'
+
+    input:
+        val ready
+        val input_model
+        val solint
+
+    output:
+        val true
+
+    shell:
+        """
+        python3 !{projectDir}/templates/get_solperdir.py !{input_model} --solint !{solint} > !{input_model}.solperdir.txt
+        """
 }
 
 
@@ -221,10 +240,10 @@ process MakeSourceDB {
 
 
     shell:
-        '''
+        """
         rm -rf !{input_model}.sourcedb
         makesourcedb in=!{input_model} out=!{input_model}.sourcedb > make_source_db.log
-        '''
+        """
 }
 
 
@@ -254,9 +273,9 @@ process BBS2Model {
 
 
     shell:
-        '''
+        """
         bbs2model !{input_model} !{output_model}
-        '''
+        """
 }
 
 
@@ -274,9 +293,9 @@ process Combine2AOModels {
         path "${output_model}"
 
     shell:
-        '''
+        """
         editmodel -m !{output_model} !{input_model1} !{input_model2}
-        '''
+        """
 }
 
 
@@ -294,10 +313,10 @@ process AO2DP3Model {
         path "${output_model}"
 
     shell:
-        '''
+        """
         editmodel -dppp-model !{output_model} !{input_model}
         python3 !{projectDir}/templates/change_patch_name.py -i !{output_model} -x no_patch -y Main
-        '''
+        """
 }
 
 
@@ -305,24 +324,37 @@ process AO2DP3Model {
 process DP3Calibrate {
     label 'sing'
     publishDir "${full_ms_path}" , mode: 'copy'
-    maxForks 5
+    maxForks 2
 
     input:
         val ready
-        tuple path(full_ms_path), path(sourcedb_name)
+        tuple path(full_ms_path), path(sourcedb_name), val(lsm_style_model) // the lsm_style_model can be either a value (false) or a real path so val works fine
         path dp3_cal_parset_file
         val output_calibration_solutions_file //.5 extension
+        val solint
 
     output:
         path "${output_calibration_solutions_file}"
 
-    // # sol_file_name=!{output_calibration_solutions_file%.*}
-    // timestamp=$(date +%FT%T)
-
     shell:
-
         '''
-        DP3 !{dp3_cal_parset_file} msin=!{full_ms_path} cal.sourcedb=!{sourcedb_name} cal.h5parm=!{output_calibration_solutions_file} > !{full_ms_path}/!{output_calibration_solutions_file}_dp3_cal.log
+
+        if [ -f !{lsm_style_model} ]; then
+
+            sols_per_dir_file="!{lsm_style_model}.solperdir.txt"
+
+            python3 !{projectDir}/templates/get_solperdir.py !{lsm_style_model} --solint !{solint} > ${sols_per_dir_file}
+            
+            nsols_per_dir=$(<${sols_per_dir_file})
+            
+            DP3 !{dp3_cal_parset_file} msin=!{full_ms_path} cal.sourcedb=!{sourcedb_name} cal.h5parm=!{output_calibration_solutions_file} cal.solint=!{solint} cal.solveralgorithm=directioniterative cal.solutions_per_direction=${nsols_per_dir} > !{full_ms_path}/!{output_calibration_solutions_file}_dp3_cal.log
+        
+        else
+
+            DP3 !{dp3_cal_parset_file} msin=!{full_ms_path} cal.sourcedb=!{sourcedb_name} cal.solint=!{solint} cal.h5parm=!{output_calibration_solutions_file} > !{full_ms_path}/!{output_calibration_solutions_file}_dp3_cal.log
+
+        fi
+
         '''
 }
 
@@ -344,9 +376,9 @@ process CalpipeCalibrate {
 
     shell:
 
-        '''
+        """
         calpipe !{config_file} !{sourcedb_name} !{output_calibration_solutions_file} !{full_ms_path}> !{full_ms_path}/!{output_calibration_solutions_file}_calpipe_ddecal.log
-        '''
+        """
 }
 
 
@@ -364,9 +396,9 @@ process ApplyDI {
         path "${full_ms_path}"
 
     shell:
-        '''
+        """
         DP3 !{di_apply_parset_file} msin=!{full_ms_path} apply.parmdb=!{calibration_solutions_file} msin.datacolumn=!{input_datacolumn} msout.datacolumn=!{output_datacolumn} > di_apply.log
-        '''
+        """
 }
 
 
@@ -404,9 +436,9 @@ process AOqualityCollect {
         path "${full_ms_path}"
 
     shell:
-        '''
+        """
         aoquality collect -d !{data_column} !{full_ms_path}
-        '''
+        """
 }
 
 

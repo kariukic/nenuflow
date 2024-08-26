@@ -9,7 +9,8 @@ include {
     MakeClusters;
     AO2DP3Model;
     SelectNearbySources;
-    AverageDataInTime
+    AverageDataInTime;
+    GetSolPerDir;
     DP3Calibrate;
     SubtractSources;
     ApplyDI;
@@ -91,7 +92,19 @@ workflow L2_A {
 
         mset_and_sourcedb_ch = mset_ch.flatten().merge( sourcedb_ch.flatten() )
 
-        di_calibration_ch = DP3Calibrate ( make_sourcedb_ch.collect(), mset_and_sourcedb_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a )
+        if ( params.sols_per_dir ) {
+
+            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( catalogs_ch.flatten() )
+
+        }
+
+        else {
+
+            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.combine( channel.of( false ) )
+
+        }
+
+        di_calibration_ch = DP3Calibrate ( make_sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_a, params.solint )
 
         all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_a}" }
 
@@ -148,19 +161,31 @@ workflow L2_B {
 
         all_sourcedb_ch = mset_ch.collect { it + "/l2b_apparent_ncp_ateam.skymodel.sourcedb" }
 
-        mset_and_sourcedb_l2b_ch = mset_ch.flatten().merge( all_sourcedb_ch.flatten() )
+        mset_and_sourcedb_ch = mset_ch.flatten().merge( all_sourcedb_ch.flatten() )
 
-        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_l2b_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b )
+        if ( params.sols_per_dir ) {
+
+            mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.merge( all_dp3_format_ch.flatten() )
+
+        }
+
+        else {
+            
+           mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.combine( channel.of( false ) )
+
+        }
+
+        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_ateam_parset, params.di_calibration_solutions_file_l2_b, params.solint )
 
         all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_b}" }
 
         sources_to_subtract_ch = mset_ch.collect { it + "/l2b_apparent_ateam.catalog.txt" }
 
-        mset_sourcedb_solutions_and_sources_to_subtract_ch = mset_and_sourcedb_l2b_ch.merge( all_solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
+        mset_sourcedb_solutions_and_sources_to_subtract_ch = mset_and_sourcedb_ch.merge( all_solutions_ch.flatten() ).merge( sources_to_subtract_ch.flatten() )
 
         subtract_ateam_ch = SubtractSources ( calibrate_ch.collect(), mset_sourcedb_solutions_and_sources_to_subtract_ch, params.ateams_subtraction_parset, "DATA", "SUBTRACTED_DATA_L2_B" )
 
-        mset_sourcedb_and_solutions_ch = mset_and_sourcedb_l2b_ch.merge( all_solutions_ch.flatten() )
+        mset_sourcedb_and_solutions_ch = mset_and_sourcedb_ch.merge( all_solutions_ch.flatten() )
 
         apply_di_ch = ApplyDI ( subtract_ateam_ch.collect(), mset_sourcedb_and_solutions_ch, params.di_apply_parset,  "SUBTRACTED_DATA_L2_B", "CORRECTED_DATA_L2_B" )
 
@@ -171,6 +196,7 @@ workflow L2_B {
         AOqualityCollect.out
 
 }
+
 
 workflow L2_C {
 
@@ -205,7 +231,9 @@ workflow L2_C {
 
         mset_and_sourcedb_ch = mset_ch.flatten().merge( all_sourcedb_ch.flatten() )
 
-        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_c )
+        mset_and_sourcedb_and_nsols_ch = mset_and_sourcedb_ch.combine( channel.of( false ) )
+
+        calibrate_ch = DP3Calibrate ( sourcedb_ch.collect(), mset_and_sourcedb_and_nsols_ch, params.di_cal_3c_parset, params.di_calibration_solutions_file_l2_c, params.solint_3c )
 
         all_solutions_ch =  mset_ch.collect { it + "/${params.di_calibration_solutions_file_l2_c}" }
 
@@ -271,7 +299,7 @@ workflow L3 {
 
         avgmsout_and_sourcedb_ch = avgmsout_ch.flatten().combine( sourcedb_ch )
 
-        calibrate_ch = DP3Calibrate ( average_ch.collect(), avgmsout_and_sourcedb_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3 )
+        calibrate_ch = DP3Calibrate ( average_ch.collect(), avgmsout_and_sourcedb_ch, params.dd_cal_parset, params.dd_calibration_solutions_file_l3, params.solint_target )
 
         all_solutions_ch =  avgmsout_ch.flatten().collect { it + "/${params.dd_calibration_solutions_file_l3}" }
 

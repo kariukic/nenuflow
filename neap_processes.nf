@@ -76,37 +76,28 @@ process MakeClusters {
         """
 }
 
-// AddPatchFilter(true, model, ra, dec, filter)
-process AddPatchFilter {
+
+process AddPatch {
     label 'sing'
     publishDir params.logs_dir, mode: 'copy'
 
     input:
         val ready
         path model
-        val ra_default
-        val dec_default
-        val filter_default
 
     output:
-        path "*deg.ao"
-        path "*deg.txt", emit: patch_filtered_model
+        path "${model.getSimpleName()}.ao", emit: patch_model
 
     shell:
         '''
         fullname=!{model}
         name=${fullname%.*}
-        ra=${2:-!{ra_default}}
-        dec=${3:-!{dec_default}}
-        filter=${4:-!{filter_default}}
 
         sed -i 's/POINT/POINT,Main/g' ${name}.txt
         sed -i 's/GAUSSIAN/GAUSSIAN,Main/g' ${name}.txt
         sed -i 's/Type/Type, Patch/g' ${name}.txt
 
         bbs2model ${name}.txt ${name}.ao
-        editmodel -m ${name}_${filter}deg.ao -near ${ra} ${dec} ${filter} ${name}.ao
-        editmodel -dppp-model ${name}_${filter}deg.txt ${name}_${filter}deg.ao
         '''
 }
 
@@ -188,7 +179,7 @@ process BandpassCalibration {
 // 1. Applying Bandpass solutions obtained earlier
 // 2. Flagging with AOFlagger
 // 3. Averaging
-process ConvertL1toL2 {
+process ConvertL1toL2Nenudata {
 
     input:
         val ready
@@ -205,6 +196,30 @@ process ConvertL1toL2 {
         nenudata l1_to_l2 !{level} !{obsid} -c !{config_file} --l1_level 'L1' --max_concurrent 1
         """
 }
+
+
+process ConvertL1toL2 {
+
+    input:
+        val ready
+        val parset
+        val config_file
+        val msout
+        val ntimes
+        val nodes
+        path datapath
+
+    output:
+        val true
+
+    shell:
+        """
+        ulimit -n 10240
+        mses=$(nenudata get_ms -c !{config_file} -s !{msout} L1 20231208_NT04)
+        python3 !{projectDir}/templates/l1_to_l2bp.py --parset !{parset} --mslist "${mses}" --msout !{msout} --ntimes !{ntimes} --nodes !{nodes} --datapath !{datapath} --datacolumn 'DATA'
+        """
+}
+
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -378,7 +393,8 @@ process AO2DP3Model {
 process DP3Calibrate {
     label 'sing'
     publishDir "${full_ms_path}" , mode: 'copy'
-    maxForks "${maxforks}"
+    maxForks 5
+    // maxForks "${maxforks}"
 
     input:
         val ready

@@ -5,6 +5,8 @@ include {
     RetrieveData;
     ConvertL1toL2;
     BBS2Model;
+    AddPatch;
+    SelectNearbySources;
     readTxtIntoString;
     readTxtAndAppendString;
 } from "./neap_processes.nf"
@@ -69,23 +71,17 @@ process DistributedCalibration {
 
 workflow {
     // l1_ch = Retrieve()
-    // l2_ch = L1toL2( l1_ch  ) //
-    // l2a_ch = Run_L2A( true )
-    // l2a_ao_model = "/home/users/satyapan/NT04231208_analysis/trial_l2a_9/l2a_ateam_sub-sources_11deg.ao"
-    // l2b_ch = Run_L2B( l2a_ao_model )
-    l2b_ao_model = "/home/users/satyapan/NT04231208_analysis/trial_l2b_2/l2b_ateam_sub-sources_11deg.ao"
-    l2c_ch = Run_L2C( l2b_ao_model )
-    // l2b_ao_model = "/home/users/satyapan/NT04231208_analysis/trial_l2b_2/l2b_ateam_sub-sources.ao"
-    // l3_ch = Run_L3( l2b_ao_model )
-
+    l2_ch = L1toL2( true )
+    l2a_ch = Run_L2A( l2_ch )
+    l2b_ch = Run_L2B( l2a_ch )
+    l2c_ch = Run_L2C( l2b_ch )
+    l3_ch = Run_L3( l2c_ch )
 }
 
 // TODO: Run AOFLagger for post-calibration RFI Flagging
-
 // For pspipe list all MS in time in one line
     // steps:
     // create mslist with the observation_id as the name of the file. observationId use date_field_spectralwindow
-
 
 workflow Retrieve {
 
@@ -97,13 +93,14 @@ workflow Retrieve {
 
 }
 
+
 workflow L1toL2 {
 
     take:
         l1_data_ready
 
     main:
-        ConvertL1toL2( l1_data_ready, params.obsid, "L2_BP", params.config_file )
+        ConvertL1toL2(true, params.retrieve.parset, params.config_file, params.retrieve.msout, params.retrieve.ntimes, params.retrieve.nodes, params.datapath )
 
     emit:
         ConvertL1toL2.out
@@ -130,13 +127,15 @@ workflow Run_L2A {
 
         aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2a" )
 
-        wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "l2a_ateam_sub" )
+        wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, 100000, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "l2a_ateam_sub" )
 
-        AddPatchFilter(true, wsclean_ch.model, params.fov_center.ra, params.fov_center.dec, params.sky_model_radius )
+        add_patch_ch = AddPatch(true, wsclean_ch.model, params.fov_center.ra, params.fov_center.dec, params.sky_model_radius )
+
+        SelectNearbySources(add_patch_ch.patch_model, params.fov_center.radec, params.sky_model_radius, "l2a_filtered.ao" )
 
     emit:
 
-        model = AddPatchFilter.out.patch_filtered_model
+        model = SelectNearbySources.out
 
 }
 
@@ -159,15 +158,18 @@ workflow Run_L2B {
 
         aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2b" )
 
-        wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "l2b_ateam_sub" )
+        wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, 100000, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "l2b_ateam_sub" )
 
-        AddPatchFilter(true, wsclean_ch.model, params.fov_center.ra, params.fov_center.dec, params.sky_model_radius )
+        add_patch_ch = AddPatch(true, wsclean_ch.model, params.fov_center.ra, params.fov_center.dec, params.sky_model_radius )
+
+        SelectNearbySources(add_patch_ch.patch_model, params.fov_center.radec, params.sky_model_radius, "l2b_filtered.ao" )
 
     emit:
 
-        model = AddPatchFilter.out.patch_filtered_model
+        model = SelectNearbySources.out
 
 }
+
 
 workflow Run_L2C {
     take:
@@ -186,13 +188,6 @@ workflow Run_L2C {
         sols_collect_ch = H5ParmCollect( cal_l2c_ch, solution_files, "di_l2_c_combined_solutions")
 
         aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2c" )
-
-    //     wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L2_C", "l2c_3c_sub" )
-
-    //     BBS2Model ( true, wsclean_ch.model, "l2c_model.ao" )
-
-    // emit:
-    //     model = BBS2Model.out
 
     
 }
@@ -216,7 +211,7 @@ workflow Run_L3 {
 
         aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l3" )
 
-        wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L3", "l3_main_sub" )
+        wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, 0, params.image_size, params.image_scale, params.spectral_pol_fit, "SUBTRACTED_DATA_L3", "l3_main_sub" )
 
     //     BBS2Model ( true, wsclean_ch.model, "l3_model.ao" )
 
@@ -235,6 +230,7 @@ process WScleanImage {
     input:
         val ready
         val mses
+        val niter
         val size // 1800
         val scale // 1amin
         val spectral_pol_fit // 2
@@ -245,10 +241,17 @@ process WScleanImage {
         path "*.fits"
         path "${image_name}-sources.txt", emit: model
 
-    shell:
-        '''
-        wsclean -name !{image_name} -pol I -weight briggs -0.1 -data-column !{data_column} -minuv-l 20 -maxuv-l 5000 -scale !{scale} -size !{size} !{size} -make-psf -niter 100000 -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol !{spectral_pol_fit} !{mses} > !{params.logs_dir}/!{image_name}_wsclean_image.log
-        '''
+    script:
+        if( niter == 0 )
+            """
+            wsclean -name ${image_name} -niter ${niter} -pol I -weight briggs -0.1 -data-column ${data_column} -minuv-l 20 -maxuv-l 5000 -scale ${scale} -size ${size} ${size} -make-psf -join-channels -channels-out 12 ${mses} > ${params.logs_dir}/${image_name}_wsclean_dirty_image.log
+            """
+
+        else
+
+            """
+            wsclean -name ${image_name} -niter ${niter} -pol I -weight briggs -0.1 -data-column ${data_column} -minuv-l 20 -maxuv-l 5000 -scale ${scale} -size ${size} ${size} -make-psf -auto-mask 3 -auto-threshold 1 -mgain 0.6 -local-rms -multiscale -no-update-model-required -join-channels -channels-out 12 -save-source-list -fit-spectral-pol ${spectral_pol_fit} ${mses} > ${params.logs_dir}/${image_name}_wsclean_clean_image.log
+            """
 }
 
 process AOqualityCombine {

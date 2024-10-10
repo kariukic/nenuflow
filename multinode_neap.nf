@@ -196,8 +196,10 @@ workflow Run_L2C {
 
         sols_collect_ch = H5ParmCollect( cal_l2c_ch, solution_files, "di_l2_c_combined_solutions")
 
-        aoq_comb_ch = AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2c" )
+        AOqualityCombine( sols_collect_ch.combined_sols, mses, "aoqstats_l2c" )
 
+    emit:
+        AOqualityCombine.out
     
 }
 
@@ -205,6 +207,7 @@ workflow Run_L2C {
 workflow Run_L3 {
     take:
         wsclean_ao_model
+        l2c_done
 
     main:
 

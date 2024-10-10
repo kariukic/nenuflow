@@ -75,7 +75,12 @@ workflow {
     l2a_ch = Run_L2A( l2_ch )
     l2b_ch = Run_L2B( l2a_ch )
     l2c_ch = Run_L2C( l2b_ch )
-    l3_ch = Run_L3( l2c_ch )
+
+workflow imaging {
+    // l1_ch = Retrieve()
+    l2_ch = L1toL2( true )
+    l2a_ch = Run_L2A( l2_ch )
+    l2b_ch = Run_L2B( l2a_ch )
 }
 
 // TODO: Run AOFLagger for post-calibration RFI Flagging

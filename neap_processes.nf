@@ -378,7 +378,7 @@ process AO2DP3Model {
 process DP3Calibrate {
     label 'sing'
     publishDir "${full_ms_path}" , mode: 'copy'
-    maxForks "${maxforks}"
+    maxForks 3
 
     input:
         val ready
@@ -386,7 +386,6 @@ process DP3Calibrate {
         path dp3_cal_parset_file
         val output_calibration_solutions_file //.5 extension
         val solint
-        val maxforks
 
     output:
         path "${output_calibration_solutions_file}"

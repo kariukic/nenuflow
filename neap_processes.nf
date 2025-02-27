@@ -393,7 +393,7 @@ process AO2DP3Model {
 process DP3Calibrate {
     label 'sing'
     publishDir "${full_ms_path}" , mode: 'copy'
-    maxForks 5
+    maxForks 4
 
     input:
         val ready

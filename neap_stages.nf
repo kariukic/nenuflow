@@ -15,6 +15,7 @@ include {
     SubtractSources;
     ApplyDI;
     AOqualityCollect;
+    MakeDP3ClustersListFile;
 } from './neap_processes.nf'
 
 params.stage = null

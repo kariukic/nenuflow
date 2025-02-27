@@ -213,11 +213,11 @@ process ConvertL1toL2 {
         val true
 
     shell:
-        """
+        '''
         ulimit -n 10240
         mses=$(nenudata get_ms -c !{config_file} -s !{msout} L1 20231208_NT04)
         python3 !{projectDir}/templates/l1_to_l2bp.py --parset !{parset} --mslist "${mses}" --msout !{msout} --ntimes !{ntimes} --nodes !{nodes} --datapath !{datapath} --datacolumn 'DATA'
-        """
+        '''
 }
 
 

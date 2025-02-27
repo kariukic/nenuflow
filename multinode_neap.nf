@@ -71,8 +71,8 @@ process DistributedCalibration {
 
 workflow {
     // l1_ch = Retrieve()
-    l2_ch = L1toL2( true )
-    l2a_ch = Run_L2A( l2_ch )
+    // l2_ch = L1toL2( true )
+    l2a_ch = Run_L2A( true ) //l2_ch )
     l2b_ch = Run_L2B( l2a_ch )
     l2c_ch = Run_L2C( l2b_ch )
     l3_ch = Run_L3( l2b_ch, l2c_ch )
@@ -138,7 +138,7 @@ workflow Run_L2A {
 
         wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, 100000, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_A", "l2a_ateam_sub" )
 
-        add_patch_ch = AddPatch(true, wsclean_ch.model, params.fov_center.ra, params.fov_center.dec, params.sky_model_radius )
+        add_patch_ch = AddPatch(true, wsclean_ch.model )
 
         SelectNearbySources(add_patch_ch.patch_model, params.fov_center.radec, params.sky_model_radius, "l2a_filtered.ao" )
 
@@ -169,7 +169,7 @@ workflow Run_L2B {
 
         wsclean_ch = WScleanImage ( aoq_comb_ch.qstats.collect(), mses, 100000, params.image_size, params.image_scale, params.spectral_pol_fit, "CORRECTED_DATA_L2_B", "l2b_ateam_sub" )
 
-        add_patch_ch = AddPatch(true, wsclean_ch.model, params.fov_center.ra, params.fov_center.dec, params.sky_model_radius )
+        add_patch_ch = AddPatch(true, wsclean_ch.model )
 
         SelectNearbySources(add_patch_ch.patch_model, params.fov_center.radec, params.sky_model_radius, "l2b_filtered.ao" )
 
